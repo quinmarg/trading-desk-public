@@ -106,6 +106,9 @@ def make_handler(desk, scheduler=None):
                     out = {"settings": desk.change_settings(body.get("changes") or {})}
                 elif path == "/api/stops/reset":          # you read the record; the losing run and drawdown restart
                     out = desk.reset_stops()
+                elif path == "/api/notify/test":          # one sample phone alert, from the saved settings
+                    desk.test_alert()
+                    out = {}
                 elif path == "/api/mode":                 # paper or live; live needs the word typed
                     out = {"mode": desk.set_mode(body.get("mode"), body.get("confirm"))}
                 elif path == "/api/scan":

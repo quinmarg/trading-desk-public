@@ -110,6 +110,24 @@ review can compare its trades with yours.
   the rules do, not to predict live results.
 - Settings > **Practice account** starts it over.
 
+## Phone alerts (ntfy)
+
+The desk can push each new **Ready** slip to your phone through
+[ntfy](https://ntfy.sh): the order, the reward to risk, the odds and up to
+three of the headlines it pulled, with buttons for the articles and the chart.
+
+1. Install the ntfy app and subscribe to a long, hard-to-guess topic name.
+2. Settings > **Phone alerts (ntfy topic)**: paste the same name, Save.
+3. Press **Send test alert** to check your phone.
+
+Empty topic = off. The demo never pushes. A failed push is logged and
+dropped; it never stops a scan. Weak and blocked signals are not pushed.
+
+> [!NOTE]
+> On ntfy.sh, topics are public: **anyone who knows the topic name can read
+> your alerts.** Pick a name nobody would guess, or run your own ntfy server
+> and put its `https://` address in Settings > **ntfy server**.
+
 ## The Account tab
 
 Because the desk never connects to a broker, you tell it your cash and how
@@ -276,6 +294,7 @@ desk/scheduler.py   the background loop
 desk/server.py      local web server (127.0.0.1 only)
 desk/screenshot.py  reads numbers off broker screenshots (Mac)
 desk/exports.py     watchlist export and chart links
+desk/notify.py      phone alerts for ready signals (ntfy)
 desk/static/        the dashboard
 thinkorswim/        chart study for thinkorswim
 tradingview/        chart study for TradingView, install steps

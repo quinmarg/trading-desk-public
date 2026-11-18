@@ -678,6 +678,8 @@ const FIELDS = [
   ["scan_universe","Scan every US stock too","About 300 data requests a pass. Slower.","select",["false","true"]],
   ["pdt_guard","Count day trades","Turn on if your broker still applies the pattern day trader rule to you.","select",["false","true"]],
   ["sec_user_agent","SEC contact","Your name and email. Turns on filings and earnings. Sent only to sec.gov."],
+  ["ntfy_topic","Phone alerts (ntfy topic)","Phone alerts. Install the ntfy app, subscribe to a hard-to-guess topic, paste it here. Empty = off. Anyone who knows the topic can read the alerts."],
+  ["ntfy_server","ntfy server","https://ntfy.sh, or your own ntfy server."],
   ["watchlist","Stocks to scan","Tickers separated by spaces.","area"],
   ["blocked","Never signal","Tickers separated by spaces.","area"],
 ];
@@ -689,7 +691,8 @@ function renderForm() {
     const id = "set-" + k;
     const ctl = type === "select" ? `<select id="${id}" data-k="${k}">${opts.map(o => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`
       : type === "area" ? `<textarea id="${id}" data-k="${k}" rows="3">${esc(v)}</textarea>` : `<input id="${id}" data-k="${k}" value="${esc(v)}">`;
-    return `<div class="frow ${type === "area" ? "full" : ""}"><label for="${id}">${l}<small>${h}</small></label>${ctl}</div>`;
+    const box = k === "ntfy_topic" ? `<div style="display:grid;gap:6px">${ctl}<button class="btn small gray" id="ntfy-test" type="button">Send test alert</button></div>` : ctl;
+    return `<div class="frow ${type === "area" ? "full" : ""}"><label for="${id}">${l}<small>${h}</small></label>${box}</div>`;
   }).join("");
 }
 // ---- Account tab: typed or screenshot-read balance and trade outcomes
@@ -793,6 +796,8 @@ document.addEventListener("click", async e => {
     await act("/api/settings", {changes:{auto_paper: on}}, on ? "Auto paper is on. It trades ready signals in the practice account." : "Auto paper is off. Trades it already has finish by their own rules."); }
   else if (t.id === "sw-auto-weak") { const on = t.getAttribute("aria-checked") !== "true";
     await act("/api/settings", {changes:{auto_paper_weak: on}}, on ? "Auto paper also takes weak signals now. Practice only." : "Auto paper takes ready signals only."); }
+  else if (t.id === "ntfy-test") { if (formDirty) return toast("Save settings first, then send the test.", true);
+    try { await api("/api/notify/test", {}); toast("Sent. Check your phone."); } catch (e) { toast(e.message, true); } }
   else if (t.id === "paper-reset") {
     if (!confirm("Start the practice account over? Its practice cash goes back to your starting balance and its practice positions and orders are removed. Your journal is not touched.")) return;
     try { await api("/api/paper/reset", {}); toast("The practice account starts over."); } catch (e) { toast(e.message, true); } }

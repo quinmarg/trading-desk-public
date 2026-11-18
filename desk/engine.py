@@ -16,6 +16,7 @@ from . import charts
 from . import exports
 from . import health
 from . import mode as M
+from . import notify
 from . import outcome
 from . import pipeline
 from . import review as R
@@ -281,9 +282,10 @@ class Desk:
             notes[h["symbol"]] = decide.note(signal=sid, status=status)
             if sid and status == "ready":
                 summary["new_signals"] += 1
-                self.j.add_event("signal", "%s: buy %d at %.2f or lower, stop %.2f, target %.2f. Good until %s."
-                                 % (h["symbol"], sig["qty"], sig["limit"], sig["stop"], sig["target"], sig["valid_until"]),
-                                 now, h["symbol"], key="signal-%d" % sid)
+                if self.j.add_event("signal", "%s: buy %d at %.2f or lower, stop %.2f, target %.2f. Good until %s."
+                                    % (h["symbol"], sig["qty"], sig["limit"], sig["stop"], sig["target"], sig["valid_until"]),
+                                    now, h["symbol"], key="signal-%d" % sid):
+                    notify.send_signal(sig, st, st["mode"], self.src.demo)   # once per signal, in the background
         summary["detail"] = [{"symbol": h["symbol"], "at": h["at"], "price": h["price"], "fate": fate.get(h["symbol"])}
                              for h in hits]
         return notes
@@ -342,9 +344,10 @@ class Desk:
             if sid and status == "ready":
                 summary["short_new"] += 1
                 summary["new_signals"] += 1
-                self.j.add_event("signal", "SHORT%s %s: sell short %d at %.2f or higher, stop %.2f, target %.2f. Good until %s."
-                                 % (" (practice only)" if sig["paper_only"] else "", sym, sig["qty"], sig["limit"],
-                                    sig["stop"], sig["target"], sig["valid_until"]), now, sym, key="signal-%d" % sid)
+                if self.j.add_event("signal", "SHORT%s %s: sell short %d at %.2f or higher, stop %.2f, target %.2f. Good until %s."
+                                    % (" (practice only)" if sig["paper_only"] else "", sym, sig["qty"], sig["limit"],
+                                       sig["stop"], sig["target"], sig["valid_until"]), now, sym, key="signal-%d" % sid):
+                    notify.send_signal(sig, st, st["mode"], self.src.demo)
         return notes
 
     # ---- watching ----------------------------------------------------
@@ -544,6 +547,13 @@ class Desk:
             for key, sentence in changes.diff(old, new):
                 self.j.add_event("settings", sentence, now)
             return new
+
+    def test_alert(self):
+        """Settings > Send test alert: one sample push to your phone, now."""
+        try:
+            notify.send_test(S.load(), self.src.demo)
+        except ValueError as e:
+            raise DeskError(str(e))
 
     def set_mode(self, new, typed=None):
         """Paper or live. Each has its own journal, so this swaps the whole record."""

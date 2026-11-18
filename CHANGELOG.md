@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Phone alerts through ntfy: each new Ready slip, with its headlines, is
+  pushed to an ntfy topic set in Settings (off by default, never in the demo),
+  plus a **Send test alert** button.
+
 ## 1.1.0 (2026-11-18)
 
 - **Short side, off by default.** Opening-range breakdowns, the long rule

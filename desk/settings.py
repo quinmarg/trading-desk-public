@@ -49,6 +49,8 @@ DEFAULTS = {
     "monitor_every_seconds": 60,
     "news_hours": 18,
     "sec_user_agent": "",            # "Your Name you@example.com" turns on SEC filings
+    "ntfy_topic": "",                # phone alerts for ready signals (desk/notify.py); empty = off
+    "ntfy_server": "https://ntfy.sh",
     "congress_members": ["pelosi"],
     "directions": "long",            # "long" | "short" | "both": which signals the desk looks for (docs/SHORTING.md)
     "short_approved": False,         # your broker approved this account for short selling; off = shorts are paper only
@@ -144,6 +146,12 @@ def validate(raw):
         raise SettingsError("congress_members must be a list of last names")
     s["congress_members"] = [str(m).strip().lower() for m in s["congress_members"] if str(m).strip()]
     s["sec_user_agent"] = str(s["sec_user_agent"]).strip()
+    s["ntfy_topic"] = str(s["ntfy_topic"]).strip()
+    if not re.fullmatch(r"[A-Za-z0-9_-]{0,64}", s["ntfy_topic"]):
+        raise SettingsError("ntfy_topic may only use letters, digits, - and _, at most 64")
+    s["ntfy_server"] = str(s["ntfy_server"]).strip()
+    if not re.fullmatch(r"https://[^\s/]+(/\S*)?", s["ntfy_server"]):
+        raise SettingsError("ntfy_server must start with https://")
     return s
 
 

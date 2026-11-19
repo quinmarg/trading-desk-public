@@ -5,11 +5,14 @@ import time
 import traceback
 
 from . import analyst
+from . import combo
 from . import settings as S
+from .paths import account_name
 
 CATALYSTS_EVERY = 3600   # seconds between catalyst gathers during the day (desk/catalysts.py)
 PLAN_RETRY = 900         # seconds before a failed or skipped game-plan look is tried again (desk/analyst.py)
 PAPER_EVERY = 30         # seconds between looks at the practice account's open orders
+COMBO_RETRY = 900        # seconds between tries of the combined SPY book (desk/combo.py) while it is due
 
 
 class Scheduler(threading.Thread):
@@ -23,6 +26,7 @@ class Scheduler(threading.Thread):
         self.last_paper = 0.0
         self.last_catalysts = 0.0
         self.last_plan_try = 0.0
+        self.last_combo_try = 0.0
         self.wake = threading.Event()
 
     def stop(self):
@@ -38,6 +42,13 @@ class Scheduler(threading.Thread):
             return fn()
         except Exception:
             self.log("%s failed:\n%s" % (name, traceback.format_exc()))
+
+    def _combo(self, now):
+        try:
+            combo.run(now)
+        except Exception as e:          # kept on the card; tried again in COMBO_RETRY seconds
+            combo.note_error(now, e)
+            self.log("%s combined book: %s" % (now, e))
 
     def tick(self, wall=None):
         """One pass of the loop. Split out so the tests can drive it."""
@@ -64,6 +75,11 @@ class Scheduler(threading.Thread):
                 self.last_plan_try = wall
                 threading.Thread(target=self._safe, args=("game plan", self.desk.make_plan), daemon=True,
                                  name="desk-plan").start()
+        # the combined SPY paper book (desk/combo.py): from 9:35 on a trading day, again after the close; main desk,
+        # never in demo, in the background so a slow Yahoo never delays a scan
+        if close and not account_name() and wall - self.last_combo_try >= COMBO_RETRY and combo.due(now):
+            self.last_combo_try = wall
+            threading.Thread(target=self._combo, args=(now,), daemon=True, name="desk-combo").start()
         # scan once per slot; in live a slot starts 25 seconds after each bar closes
         every = st["scan_every_seconds"]
         slot = "demo-" + now if self.desk.src.demo else int((wall - 25) // every)

@@ -40,6 +40,11 @@ class DeskCase(unittest.TestCase):
             p = mock.patch.object(analyst, name, side_effect=RuntimeError("not in tests"))
             p.start()
             self.addCleanup(p.stop)
+        # and no test reads SPY's daily chart for the combined book; test_combo drives it with fake bars
+        from desk import combo
+        cb = mock.patch.object(combo, "fetch", side_effect=RuntimeError("not in tests"))
+        cb.start()
+        self.addCleanup(cb.stop)
         lev = mock.patch.object(S, "PAPER_LEVERAGE", 1.0)        # and plain cash; test_settings.PaperBold covers 4x
         lev.start()
         self.addCleanup(lev.stop)

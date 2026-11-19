@@ -28,7 +28,7 @@ def cache():
 
 def cmd_fetch(a):
     bad = []
-    for i, s in enumerate(POOL):
+    for i, s in enumerate(POOL + ["SPY"]):      # SPY for the market fields only; it is not in the pool
         try:
             B.load(s, cache())
             print("%2d/%d %s ok" % (i + 1, len(POOL), s), flush=True)
@@ -38,10 +38,18 @@ def cmd_fetch(a):
     print("done; failed:", " ".join(bad) or "none")
 
 
+def _spy():
+    """SPY's sessions for the market fields, or None when it is not cached (python3 tools/vol_backtest.py fetch)."""
+    try:
+        return dict(B.sessions(B.load("SPY", cache(), fetch=False)["intraday"]))
+    except Exception:
+        return None
+
+
 def _one(args):
     sym, rule, replays = args
     try:
-        return B.signals(sym, B.load(sym, cache(), fetch=False), rule, replays)
+        return B.signals(sym, B.load(sym, cache(), fetch=False), rule, replays, spy=_spy())
     except Exception as e:
         print("skip %s: %s" % (sym, e), file=sys.stderr)
         return []

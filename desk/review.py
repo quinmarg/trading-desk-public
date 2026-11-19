@@ -319,6 +319,38 @@ def plan_agreement(signals, outcomes=()):
             for k, g in out.items()}
 
 
+ARM_STATUSES = ("ready", "taken", "skipped", "expired")   # long slips that were good to buy at some point
+ARM_DAYS = 20
+
+
+def entry_arms(outcomes, shadows, sig_by_id):
+    """The entry-style A/B (docs/MODELS.md): the real slip's replay against the shadow VWAP and retest limits, over
+    the same long signals, in the real slip's risk units. Logging only: nothing here changed a signal or a fill."""
+    real = {o["signal_id"]: o for o in outcomes}
+    arms = {"slip": [], "vwap": [], "retest": [], "spy_with": [], "spy_against": []}
+    days = set()
+    for sh in shadows:
+        s = sig_by_id.get(sh["signal_id"]) or {}
+        if sh["status"] not in ARM_STATUSES or sh["arm"] not in arms:
+            continue
+        arms[sh["arm"]].append((sh["result"], sh["r_orig"]))
+        days.add(sh["date"])
+        if sh["arm"] == "vwap" and sh["signal_id"] in real:      # once per signal: the real slip, same units
+            o, p = real[sh["signal_id"]], s.get("payload") or {}
+            try:
+                risk = float(p["limit"]) - float(p["stop"])
+                r = round((o["exit"] - o["entry"]) / risk, 2) if o["exit"] is not None and risk > 0 else None
+            except (KeyError, TypeError, ValueError):
+                r = None
+            arms["slip"].append((o["result"], r))
+    out = {}
+    for k, xs in arms.items():
+        rs = [r for _, r in xs if r is not None]
+        out[k] = {"signals": len(xs), "filled": len(rs), "total_r": _r2(sum(rs)) if rs else None,
+                  "avg_r": _r2(_mean(rs)) if rs else None, "no_fill": sum(1 for res, _ in xs if res == "no fill")}
+    return {"days": len(days), "enough": len(days) >= ARM_DAYS, "arms": out}
+
+
 def signal_counts(signals):
     out = {}
     for s in signals:
@@ -467,6 +499,25 @@ def report(mode, s, now, rules_hash=None):
         {"with": "With the plan", "against": "Against the plan", "none": "Not in a plan"}[k], v["signals"], v["replayed"],
         fr(v["avg_r"]), f(v["win_rate"], "%.1f")) for k, v in pa.items() if v["signals"]] \
         or ["  none yet"]
+    ea = s.get("entry_arms") or {}
+    L += ["", "ENTRY STYLE A/B (shadow, logging only: same long signals, same stop and target, R in the slip's own risk)"]
+    if ea.get("arms", {}).get("vwap", {}).get("signals"):
+        names = {"slip": "Real slip (breakout + chase)", "vwap": "Buy limit at VWAP", "retest": "Buy limit at the range high",
+                 "spy_with": "Real slip, SPY over its VWAP (C4)", "spy_against": "Real slip, SPY under its VWAP (C4)"}
+        L += ["  %s: %d signals, %d filled, %d never filled, total %s, average %s"
+              % (names[k], v["signals"], v["filled"], v["no_fill"], fr(v["total_r"]), fr(v["avg_r"]))
+              for k, v in ea["arms"].items() if v["signals"] or k in ("slip", "vwap", "retest")]
+        L.append("  %d trading days so far. %s" % (ea["days"], "Enough days to start comparing; still check the spread."
+                                                  if ea["enough"] else "Wait for %d or more before reading anything into it."
+                                                  % ARM_DAYS))
+    else:
+        L.append("  none yet (logged after 4:05 PM New York for each long signal that was ready)")
+    try:
+        from . import combo
+        cl = combo.lines(s["combo"]) if s.get("combo") else ["  not loaded"]
+    except Exception as e:          # a damaged combo.json must not break the review
+        cl = ["  unreadable: %s" % e]
+    L += ["", "COMBINED SPY MODEL (a second paper book: dip-buyer, Halloween and turn-of-month votes; docs/MODELS.md)"] + cl
     L += [""] + _decision_lines(s.get("decisions")) + ["BY RULE SET"]
     L += ["  %s%s: %d closed, %s, average R %s" % (g["rules"], " (since %s)" % g["first_seen"] if g["first_seen"] else "",
                                                   g["closed"], _usd(g["total"]), f(g["avg_r"])) for g in s["by_rules"]] or ["  none"]

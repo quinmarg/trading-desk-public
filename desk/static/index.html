@@ -429,6 +429,10 @@ footer{max-width:1180px;margin:0 auto;padding:4px 20px 32px;color:var(--text3);f
           <div class="card" id="events"></div>
         </div>
         <div>
+          <h2 class="section-title">Combined SPY book</h2>
+          <div class="card" id="combo"><p class="foot-note" style="margin:0">Loading…</p></div>
+        </div>
+        <div>
           <h2 class="section-title">Export watchlist</h2>
           <div class="card" id="export">
             <p class="foot-note" style="margin:0 0 10px">Today's signals, open trades and your watchlist as a list for thinkorswim or TradingView. The desk sends nothing anywhere: you paste or upload the list yourself.</p>
@@ -773,6 +777,28 @@ function render() {
 }
 // ---- Results: fetched when the Journal tab is open (it reads the whole record)
 let RV = null;
+let CB = null, CB_AT = 0;
+async function loadCombo() {
+  if (Date.now() - CB_AT < 60000 && CB) return renderCombo();
+  try { CB = await api("/api/combo"); CB_AT = Date.now(); } catch (e) { CB = {error: e.message}; }
+  renderCombo();
+}
+function renderCombo() {
+  const c = CB || {}, box = $("#combo"), pct = w => Math.round(w * 100) + "%";
+  const vt = v => [["dip", "Dip-buyer"], ["halloween", "Halloween"], ["turn", "Turn of month"]].map(([k, n]) => `<div class="row-kv num"><span>${n}</span><b>${v[k] ? "In" : "Out"}</b></div>`).join("");
+  const pctx = x => (x >= 0 ? "+" : "") + x.toFixed(2) + "%";
+  if (!c.started) { box.innerHTML = `<p class="foot-note" style="margin:0">${esc(c.error ? "Last try failed: " + c.error : c.note || "Not started yet.")}</p>`; return; }
+  const d = c.today, t = c.totals, n = c.next;
+  box.innerHTML = `<div class="row-kv num"><span>${esc(d.date)} in SPY</span><b>${pct(d.weight)}</b></div><div class="meter"><i style="width:${d.weight * 100}%"></i></div>
+    ${vt(d.votes)}
+    <div class="row-kv num" style="margin-top:10px"><span>Filled</span><b>${px(d.fill)} at ${esc(t12(d.fill_at.slice(11)))}${d.how === "backfill" ? " (backfill)" : ""}</b></div>
+    <div class="row-kv num"><span>Book</span><b>${usd(t.equity)} (${pctx(t.return_pct)})</b></div>
+    <div class="row-kv num"><span>Buy-and-hold SPY</span><b>${usd(t.spy)} (${pctx(t.spy_return_pct)})</b></div>
+    <div class="row-kv num"><span>Worst drop, book / SPY</span><b>${t.max_dd_pct.toFixed(2)}% / ${t.spy_max_dd_pct.toFixed(2)}%</b></div>
+    ${n && n.date !== d.date ? `<div class="row-kv num"><span>Next (${esc(n.date)})</span><b>${pct(n.weight)}</b></div>` : ""}
+    ${c.error ? `<p class="foot-note" style="margin:8px 0 0;color:var(--stop)">Last try failed: ${esc(c.error)}</p>` : ""}
+    <p class="foot-note" style="margin:8px 0 0">A second paper book since ${esc(c.start)}, $10,000 start. It holds the share of three votes that say In, decided from the close before. Paper only: it never places an order. Judge it after 6 to 12 months.</p>`;
+}
 async function loadReview() { try { RV = await api("/api/review"); renderReview(); } catch (e) { $("#review").innerHTML = `<div class="callout bad">${esc(e.message)}</div>`; } }
 // ---- Catalysts tab (desk/catalysts.py): read from the state; links are https only, checked by the desk
 function catRow(r) {
@@ -1088,7 +1114,7 @@ document.addEventListener("paste", e => {
   readShot(exitBtn ? "trade-" + exitBtn.dataset.exit : "balance", item.getAsFile()); e.preventDefault();
 });
 
-async function load() { try { S = await api("/api/state"); render(); if ($("#v-journal").classList.contains("on")) loadReview(); } catch (e) { $("#clock").textContent = "The desk is not answering. Is it still running?"; } }
+async function load() { try { S = await api("/api/state"); render(); loadCombo(); if ($("#v-journal").classList.contains("on")) loadReview(); } catch (e) { $("#clock").textContent = "The desk is not answering. Is it still running?"; } }
 
 document.addEventListener("keydown", e => { if (e.target.id === "wl-find" && e.key === "Enter" && e.target.value.trim()) select(e.target.value); });
 document.addEventListener("input", e => {

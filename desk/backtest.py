@@ -150,8 +150,31 @@ DEFAULT_RULE = {"or_minutes": 15, "stop": "or-mid", "target_r": 2.0, "chase_r": 
                 "flat_by": "15:55", "min_stop_pct": 0.3}
 
 
-def signals(symbol, data, rule=None, replays=2000, tm=None):
-    """Every signal the rule makes on this stock's 60 days, with the replay, the odds and the screen measures."""
+def spy_at(spy_day, k):
+    """SPY at the close of bar k: (% since its open, 1 if over its session VWAP else -1), or (None, None)."""
+    if not spy_day:
+        return None, None
+    pv = vol = 0.0
+    for b in spy_day[:k + 1]:
+        pv += (b["h"] + b["l"] + b["c"]) / 3.0 * b["v"]
+        vol += b["v"]
+    c = spy_day[k]["c"]
+    return round(100 * (c / spy_day[0]["o"] - 1), 3), (1 if vol and c > pv / vol else -1)
+
+
+def nr7(prev):
+    """The day before was the narrowest of its last 7 (Crabel's NR7)."""
+    if len(prev) < 7:
+        return None
+    rng = [b["h"] - b["l"] for b in prev[-7:]]
+    return rng[-1] <= min(rng)
+
+
+def signals(symbol, data, rule=None, replays=2000, tm=None, spy=None):
+    """Every signal the rule makes on this stock's 60 days, with the replay, the odds and the screen measures.
+    spy: {date: 78 SPY bars} adds the playbook's market fields (docs/MODELS.md). Long slips the real limit never
+    filled are kept too, marked filled=False, so the shadow entry arms (outcome.shadow) can be compared on every
+    slip; score() leaves them out."""
     rule = dict(DEFAULT_RULE, **(rule or {}))
     tm = tm or _tm()
     days = sessions(data["intraday"])
@@ -169,9 +192,12 @@ def signals(symbol, data, rule=None, replays=2000, tm=None):
         or_vol = sum(b["v"] for b in D[:n])
         past = [sum(b["v"] for b in X[:n]) for _, X in days[i - FEATURE_DAYS:i]]
         rvol = or_vol / (sum(past) / len(past)) if sum(past) > 0 else None
+        s50 = sma_before(daily, date, 50)
         feats = {"atr_pct": round(atrp, 2), "rvol": round(rvol, 2) if rvol else None,
                  "gap_pct": round(100 * (D[0]["o"] / prev_close - 1), 2), "price": D[0]["o"],
-                 "dollar_vol": round(sum(b["v"] * b["c"] for b in days[i - 1][1]) / 1e6, 1)}
+                 "dollar_vol": round(sum(b["v"] * b["c"] for b in days[i - 1][1]) / 1e6, 1),
+                 "first_up": D[0]["c"] > D[0]["o"], "nr7": nr7(prev),
+                 "above_50d": None if s50 is None else prev_close > s50}
         r = dict(rule, atr_usd=atrp / 100 * prev_close)
         for side in ("long", "short"):
             p = plan_day(D, side, r)
@@ -185,12 +211,19 @@ def signals(symbol, data, rule=None, replays=2000, tm=None):
                 if avg is None or p["entry"] >= avg:
                     continue                        # the desk only shorts under the 200-day average
             res = outcome.replay(p, D)
-            if res["result"] in (outcome.NO_FILL, outcome.NO_PLAN):
+            arms = outcome.shadow(dict(p, opening_range={"high": p["or_high"]}), D) if side == "long" else {}
+            filled = res["result"] not in (outcome.NO_FILL, outcome.NO_PLAN)
+            if not filled and not arms:
                 continue
-            risk = abs(res["entry"] - p["stop"])
+            spy_pct, spy_vwap = spy_at((spy or {}).get(date), p["k"])
+            mkt = {"spy_pct": spy_pct, "spy_vwap": spy_vwap,
+                   "rel_pct": None if spy_pct is None else round(100 * (D[p["k"]]["c"] / D[0]["o"] - 1) - spy_pct, 3),
+                   "r_vwap": (arms.get("vwap") or {}).get("r_orig"), "r_retest": (arms.get("retest") or {}).get("r_orig"),
+                   "plan_risk": round(p["limit"] - p["stop"], 4) if side == "long" else None, "filled": filled}
+            risk = abs(res["entry"] - p["stop"]) if filled else p["risk"]
             out.append(dict(feats, symbol=symbol, date=date, side=side, result=res["result"], r=res["r"],
-                            risk=round(risk, 2), entry=res["entry"], bar=p["k"],
-                            odds=odds(tm, days[:i], p, rule["flat_by"], replays) if replays else None))
+                            risk=round(risk, 2), entry=res["entry"] if filled else p["entry"], bar=p["k"], **mkt,
+                            odds=odds(tm, days[:i], p, rule["flat_by"], replays) if replays and filled else None))
     return out
 
 
@@ -200,6 +233,7 @@ def score(rows, cost=0.01, edge_floor=-5.0, bp=0.0):
     """Win rate, average R and profit factor after `cost` dollars a share plus `bp` basis points of the price
     a side (in and out together), counting only signals the desk would grade ready (odds known, edge at or
     over the floor). edge_floor=None counts every signal."""
+    rows = [x for x in rows if x.get("filled", True)]          # unfilled slips are only there for the entry A/B
     ready = [x for x in rows if x["odds"] and x["odds"]["edge"] is not None and x["odds"]["edge"] >= edge_floor] \
         if edge_floor is not None else rows
     rs = [x["r"] - (cost + 2 * bp / 1e4 * x["entry"]) / x["risk"] for x in ready if x["risk"] > 0 and x["r"] is not None]

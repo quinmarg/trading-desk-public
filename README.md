@@ -41,6 +41,7 @@ cd trading-desk
 python3 -m desk --demo     # saved data from Monday 2026-10-19, no network: look around first
 python3 -m desk            # today's market, during US market hours
 python3 -m desk review     # print your record (paper and live) as text and exit
+python3 -m desk combo      # the combined SPY paper book: bring it up to date and print it
 ```
 
 The dashboard opens at http://127.0.0.1:8787 and only your computer can reach
@@ -137,6 +138,30 @@ brokers may need more label words in `desk/screenshot.py`. Details:
 - Every signal carries a **rule set** code, so results can be read per set of
   rules. Every settings change is logged; write rule changes up in
   [docs/CHANGES.md](docs/CHANGES.md).
+
+Two more things are logged for comparison only; neither changes a signal, a size or a fill:
+
+- **Entry style A/B (shadow).** For each long slip that was good to buy, the after-close replay also asks
+  what a buy limit at the session VWAP, or at the opening-range high (a retest), would have done with
+  the same stop and target, resting 60 minutes. The review lists the three side by side, in the real
+  slip's risk units, and says to wait for 20 trading days before reading anything into it.
+  It also tags each long slip's real replay by SPY's side of its VWAP at the trigger, the best of nine
+  playbook filters in the backtest but not yet significant (`docs/MODELS.md` section 5).
+- **The combined SPY model** (`desk/combo.py`): see below.
+
+## A second paper book: the combined SPY model
+
+A daily model on SPY from a friend's model lab, run beside the opening-range desk as its own paper
+book. Three votes, each in or out, and the book holds their average (0, 1/3, 2/3 or all of it):
+**dip-buyer** (above the 200-day average, or RSI(2) under 10 until the close is back over the 5-day
+average), **Halloween** (November to April, or above the 200-day) and **turn of month** (last trading
+day and first 3, or above the 200-day). It decides from the close before, on dividend-adjusted closes;
+from 9:35 New York it fills today at the first price after it runs, backfills days the desk was off at
+their open, and counts dividends and T-bill interest on uninvested cash. $10,000 to start, 3 basis
+points a side, fractional shares, paper only: it never places an order. The Desk tab's **Combined SPY
+book** card shows today's weight, the votes and the book against buy-and-hold SPY; `GET /api/combo` and
+`python3 -m desk combo` give the same. State: `data/combo.json`. What the lab found, what is in-sample
+and how the opening-range results compare: [docs/MODELS.md](docs/MODELS.md).
 
 ## Volatile stocks (paper mode)
 
@@ -432,7 +457,7 @@ desk/engine.py      scan, watch, record fills and exits
 desk/paper.py       the pretend practice account
 desk/auto.py        auto paper: the desk trades the practice account itself
 desk/orders.py      order shapes for the practice account
-desk/outcome.py     after-the-close replay of every signal
+desk/outcome.py     after-the-close replay of every signal, plus the shadow entry arms
 desk/review.py      results, the review report, day summary
 desk/scheduler.py   the background loop
 desk/server.py      local web server (127.0.0.1 only)
@@ -445,6 +470,7 @@ desk/analyst.py     Claude's game plan: morning and hourly looks, day settings (
 desk/agent.py       the watchlist agent: Claude picks from the morning's candidates (optional)
 desk/notify.py      phone alerts for ready signals and big catalysts (ntfy)
 desk/catalysts.py   public news and events, scored, with places on the morning list
+desk/combo.py       the combined SPY model: a second paper book (docs/MODELS.md)
 desk/graph.py       the Graph tab: made or lost over time, every paper account
 desk/static/        the dashboard (vendor/: Lightweight Charts and two fonts, with licences)
 thinkorswim/        chart study for thinkorswim

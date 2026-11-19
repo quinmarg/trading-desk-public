@@ -96,3 +96,62 @@ def _replay_short(limit, stop, target, start, until, flat, bars):
             return done(TARGET, min(target, b["o"]), b, "Reached the target.")
     last = after[-1]
     return done(OPEN, last["c"], last, "The candles end before the trade did.")
+
+
+# ---- shadow entry arms (logging only; docs/MODELS.md) -----------------
+# The same long slip, same stop and target, with the buy limit moved to a pullback level. Declared before any data
+# was seen: two arms, a 60-minute resting window from the trigger candle's close, never above the real limit.
+SHADOW_ARMS = ("vwap", "retest")
+SHADOW_MINUTES = 60
+
+
+def vwap_at(bars, minute):
+    """Session VWAP over the 5-minute bars that had closed by `minute` (typical price x volume)."""
+    pv = vol = 0.0
+    for b in bars:
+        if b["minute"] + 5 > minute:
+            break
+        pv += (b["h"] + b["l"] + b["c"]) / 3.0 * b["v"]
+        vol += b["v"]
+    return pv / vol if vol else None
+
+
+def shadow(p, bars, spy=None):
+    """{arm: replay result + limit + r_orig} for a long slip, or {} for a short or a slip with no plan.
+    r_orig is in the real slip's risk (limit - stop), so every arm is measured in the same units: the same share
+    count as the real slip, not re-sized. Nothing here changes a signal, a size or a fill."""
+    if p.get("side") == "short":
+        return {}
+    try:
+        limit, stop = float(p["limit"]), float(p["stop"])
+        start = _minute(p.get("trigger_close_time") or p["valid_until"])
+        flat = _minute(p.get("flat_by") or "15:55")
+    except (KeyError, TypeError, ValueError):
+        return {}
+    risk = limit - stop
+    if risk <= 0:
+        return {}
+    until = min(start + SHADOW_MINUTES, flat)
+    levels = {"vwap": vwap_at(bars, start), "retest": (p.get("opening_range") or {}).get("high")}
+    out = {}
+    for arm in SHADOW_ARMS:
+        lvl = levels[arm]
+        if lvl is None:
+            out[arm] = {"result": NO_PLAN, "entry": None, "exit": None, "exit_time": None, "r": None, "limit": None,
+                        "r_orig": None, "note": "No level to buy at."}
+            continue
+        q = dict(p, limit=min(int(float(lvl) * 100 + 1e-6) / 100.0, limit), valid_until="%02d:%02d" % divmod(until, 60))
+        o = replay(q, bars)
+        o["limit"] = q["limit"]
+        o["r_orig"] = round((o["exit"] - o["entry"]) / risk, 2) if o.get("exit") is not None else None
+        out[arm] = o
+    # candidate C4 (docs/MODELS.md section 5): the real slip, tagged by SPY's side of its VWAP at the trigger
+    if spy:
+        done = [b for b in spy if b["minute"] + 5 <= start]
+        vw = vwap_at(spy, start)
+        if done and vw:
+            o = replay(p, bars)
+            o["limit"] = limit
+            o["r_orig"] = round((o["exit"] - o["entry"]) / risk, 2) if o.get("exit") is not None else None
+            out["spy_with" if done[-1]["c"] > vw else "spy_against"] = o
+    return out

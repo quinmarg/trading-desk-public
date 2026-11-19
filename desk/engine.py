@@ -16,6 +16,7 @@ from . import autolist
 from . import breaker
 from . import catalysts as C
 from . import changes
+from . import combo
 from . import charts
 from . import exports
 from . import graph as G
@@ -586,6 +587,7 @@ class Desk:
         only_gaps: replay again just the signals that got "no data" before."""
         now, done, got = self.src.now(), 0, {}
         gaps = self.j.outcome_gaps(date) if only_gaps else None
+        spy = []                                     # SPY's day, read once when first needed (C4, docs/MODELS.md)
         for s in self.j.signals(date=date, limit=1000):
             if gaps is not None and s["id"] not in gaps:
                 continue
@@ -599,6 +601,13 @@ class Desk:
                 o = {"result": "no data", "entry": None, "exit": None, "exit_time": None, "r": None, "note": str(e)[:200]}
             else:
                 o = outcome.replay(p, bars)
+                if spy == [] and p.get("side") != "short":
+                    try:
+                        spy = charts.session_bars(charts.intraday(self.src, "SPY") if self.src.demo
+                                                  else charts.fetch("SPY", "1mo", "5m"), date + " 16:00") or None
+                    except charts.ChartError:
+                        spy = None
+                self.j.set_shadow(s["id"], date, s["symbol"], s["status"], outcome.shadow(p, bars, spy or None), now)
             self.j.set_outcome(s["id"], date, s["symbol"], s["status"], o, now)
             done += 1
         self.j.put("outcomes_done", date)
@@ -1013,6 +1022,8 @@ class Desk:
         summ = R.summary(j.trades(limit=100000), j.signals(limit=100000), j.events(limit=100000), j.get("rulesets", {}),
                          outcomes=j.outcomes(), scans=j.scans(limit=100000), lists=j.get("scan_lists", {}))
         summ["decisions"] = decide.counts(j.decisions(limit=100000))
+        summ["entry_arms"] = R.entry_arms(j.outcomes(), j.shadows(), {x["id"]: x for x in j.signals(limit=100000)})
+        summ["combo"] = combo.view()
         return {"mode": mode, "now": now, "summary": summ, "text": R.report(mode, summ, now, stamp.rules_hash(st))}
 
     def graph(self):

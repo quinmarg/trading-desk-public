@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.1 (2026-11-19)
+
+- **Combined SPY model, a second paper book** (`desk/combo.py`): three
+  daily votes on SPY (dip-buyer, Halloween, turn of month, each "or above the
+  200-day average"), held as their average. Dividends and T-bill interest on
+  uninvested cash count. Desk-tab card, review section, `GET /api/combo` and
+  `python3 -m desk combo`. Paper only.
+- **Entry style A/B, shadow only**: after the close each long slip that was
+  good to buy is also replayed with a buy limit at the session VWAP and at the
+  opening-range high. Logged for comparison; it changes no signal or fill.
+- **SPY-vs-VWAP tag** on each long slip's replay, for the review.
+- **Backtest rows** gain the playbook's fields and the shadow entry arms;
+  Claude's playbook carries the test results as evidence notes.
+- **docs/MODELS.md**: the combined model, the opening-range check against the
+  desk's own backtest, and nine playbook filters declared before testing (none
+  passed, so nothing is switched on).
+
 ## 1.2.0 (2026-11-19)
 
 - **Desk tab redesign**: a TradingView-style workspace. Today's list on the

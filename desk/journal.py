@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS scans(
 CREATE TABLE IF NOT EXISTS outcomes(
   signal_id INTEGER PRIMARY KEY, date TEXT NOT NULL, symbol TEXT NOT NULL, status TEXT NOT NULL,
   result TEXT NOT NULL, entry REAL, exit REAL, exit_time TEXT, r REAL, note TEXT, at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS shadow(
+  signal_id INTEGER NOT NULL, arm TEXT NOT NULL, date TEXT NOT NULL, symbol TEXT NOT NULL, status TEXT NOT NULL,
+  result TEXT NOT NULL, limit_price REAL, entry REAL, exit REAL, r_orig REAL, at TEXT NOT NULL,
+  PRIMARY KEY(signal_id, arm));
 """
 
 # Columns added after the first release. Each is added only when it is missing and has a default,
@@ -357,6 +361,17 @@ class Journal:
                        "r=excluded.r, note=excluded.note, at=excluded.at",
                        (signal_id, date, symbol, status, o["result"], o["entry"], o["exit"], o["exit_time"], o["r"],
                         o["note"], now))
+
+    def set_shadow(self, signal_id, date, symbol, status, arms, now):
+        """The shadow entry arms of one signal (desk/outcome.shadow): logging only, for the review's A/B."""
+        with self._tx() as db:
+            for arm, o in arms.items():
+                db.execute("INSERT OR REPLACE INTO shadow(signal_id,arm,date,symbol,status,result,limit_price,entry,exit,"
+                           "r_orig,at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (signal_id, arm, date, symbol, status, o["result"],
+                                                                       o.get("limit"), o["entry"], o["exit"], o.get("r_orig"), now))
+
+    def shadows(self, limit=100000):
+        return self._all("SELECT * FROM shadow ORDER BY signal_id, arm LIMIT ?", (limit,))
 
     def outcomes(self, date=None, limit=100000):
         if date:

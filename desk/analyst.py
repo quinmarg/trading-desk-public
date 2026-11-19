@@ -41,13 +41,13 @@ MAX_ADD_CANDIDATES = 20
 PLAYBOOK = """\
 1. Only call a stock 'in play' if the opening 5-minute volume is at least 1.5x its 14-day average for that bar; avoid otherwise. (strong: paper and the desk's own test)
 2. Require a daily ATR of at least 3 % of price; skip calm stocks. (some: desk test; paper uses a dollar ATR)
-3. Favor the direction the first 5-minute bar closed (long if up, short if down); a break against it is lower grade. (some: paper)
-4. Rank stocks by opening relative volume; the higher the multiple, the better the thesis. (strong: paper, edge rose with the multiple)
+3. Favor the direction the first 5-minute bar closed (long if up, short if down); a break against it is lower grade. (weak: paper; the desk's own backtest, 2026-11, found no gain from it on 76 in-play trades)
+4. Rank stocks by opening relative volume; the higher the multiple, the better the thesis. (strong: paper, edge rose with the multiple; the desk's backtest, 2026-11, found 3x no better than 1.5x on 22 trades, too few to judge)
 5. Require a named catalyst (earnings, guidance, regulatory, contract, upgrade). No catalyst means 'move may fade': lower the bias one notch. (some: attention studies; no intraday test)
 6. Rank catalysts: company-specific numbers news above analyst notes above sector or macro talk above no news. (weak)
 7. Prefer a stock that had not already run 50 %+ in recent weeks for a long thesis on news. (weak: Qullamaggie)
 8. Compare the stock with SPY: long bias needs the stock stronger than SPY since the open; short bias needs it weaker. (weak)
-9. If SPY and QQQ are both below VWAP and falling at 9:45, downgrade long theses one notch; the reverse for shorts. (weak)
+9. If SPY is below its VWAP when a long sets up, downgrade it one notch; the reverse for shorts. (some: the desk's backtest, 2026-11: breakouts with SPY on their side of VWAP averaged +0.12R against +0.06R for all, 234 held-out trades, not yet significant; logged forward in the review as C4)
 10. A gap alone is not a thesis. A gap with 1.5x+ opening volume and news may continue; a gap on thin volume probably fades. (some: Berkman et al. vs the stocks-in-play paper)
 11. Key levels to list: premarket high and low, prior-day high, low and close, VWAP, the opening range high and low. (weak as predictors; strong as price targets for stops and entries)
 12. Confirms a long: a 5-minute close above the opening range high with volume above the opening candles and price above VWAP. Confirms a short: the mirror. (some: ORB paper; VWAP paper is disputed)
@@ -56,7 +56,7 @@ PLAYBOOK = """\
 15. Prefer 'hold to the close' over a fixed 2R target in the plan text for strong catalyst days; say a quick target is likely to be hit rarely. (some: desk test, +0.19R vs about 0R on 41 sessions)
 16. Flag low-float, under-$5 names, and halt-prone moves as 'avoid': a stop does not fill during a trading pause. (some: LULD rules; FINRA warnings)
 17. Flag a stock that is down 10 %+ from the prior close: no short plan (SEC Rule 201). (strong: rule)
-18. After a narrow-range prior day (the narrowest of the last 4 or 7 days), raise the chance of expansion; note it. (weak: Crabel, untested here)
+18. After a narrow-range prior day (the narrowest of the last 4 or 7 days), note it, but do not raise the grade. (weak: Crabel; the desk's backtest, 2026-11, found NR7 breakouts did worse, -0.31R on 16 trades)
 19. On a day when SPY has no direction and the stock's opening range is very wide relative to ATR, call 'avoid': stop distance and slippage eat the edge. (weak)
 20. Always state costs: breakeven requires the move to beat about $0.01 a share plus slippage; say if the stop is under 0.3 % of price. (strong: costs erase thin edges, both replications)"""
 

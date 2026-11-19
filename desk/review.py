@@ -428,6 +428,9 @@ def report(mode, s, now, rules_hash=None):
     L = ["Trading Desk review: %s record, as of %s" % (mode.upper(), now),
          "Desk %s, skills %s%s" % (__version__, stamp.skills_commit(), ", current rule set %s" % rules_hash if rules_hash else ""),
          "",
+         "MODEL 1: OPENING-RANGE BREAKOUT + CLAUDE'S GAME PLAN (this account). Models 2 and 3 trade their own "
+         "practice accounts; their sections are near the end.",
+         "",
          "RESULTS (%d closed, %d open)" % (r["closed"], s["open"]),
          "  %s. %s" % (st["label"], st["note"])]
     if r["closed"]:
@@ -517,7 +520,15 @@ def report(mode, s, now, rules_hash=None):
         cl = combo.lines(s["combo"]) if s.get("combo") else ["  not loaded"]
     except Exception as e:          # a damaged combo.json must not break the review
         cl = ["  unreadable: %s" % e]
-    L += ["", "COMBINED SPY MODEL (a second paper book: dip-buyer, Halloween and turn-of-month votes; docs/MODELS.md)"] + cl
+    L += ["", "MODEL 2: COMBINED SPY (its own practice account: dip-buyer, Halloween and turn-of-month votes; "
+              "docs/MODELS.md)"] + cl
+    try:
+        from . import winter3x
+        wl = winter3x.lines(s["winter3x"]) if s.get("winter3x") else ["  not loaded"]
+    except Exception as e:          # a damaged winter3x.json must not break the review
+        wl = ["  unreadable: %s" % e]
+    L += ["", "MODEL 3: WINTER 3X (its own practice account: UPRO Nov-Apr, SPY May-Oct, cash below the 200-day; "
+              "did not pass its sealed test)"] + wl
     L += [""] + _decision_lines(s.get("decisions")) + ["BY RULE SET"]
     L += ["  %s%s: %d closed, %s, average R %s" % (g["rules"], " (since %s)" % g["first_seen"] if g["first_seen"] else "",
                                                   g["closed"], _usd(g["total"]), f(g["avg_r"])) for g in s["by_rules"]] or ["  none"]

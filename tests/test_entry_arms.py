@@ -72,7 +72,7 @@ class Shadow(DemoCase):
         text = d.review()["text"]
         self.assertIn("ENTRY STYLE A/B", text)
         self.assertIn("Wait for 20 or more", text)
-        self.assertIn("COMBINED SPY MODEL", text)
+        self.assertIn("MODEL 2: COMBINED SPY", text)
         # nothing about the real signal or its outcome moved
         self.assertEqual(d.j.signal(a)["payload"]["limit"], 10.34)
         self.assertEqual(d.j.outcomes()[0]["entry"], 10.2)

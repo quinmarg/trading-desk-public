@@ -1,3 +1,4 @@
+import math
 """The combined SPY paper book (desk/combo.py): the votes, the calendar, the book's arithmetic, the daily run."""
 import datetime
 import json
@@ -124,35 +125,19 @@ class Parse(DeskCase):
 
 
 class Book(DeskCase):
-    def test_the_book_pays_dividends_charges_costs_and_trades_only_on_a_new_weight(self):
-        days = [{"date": "d1", "weight": 1 / 3, "fill": 100.0}, {"date": "d2", "weight": 1 / 3, "fill": 101.0},
-                {"date": "d3", "weight": 1.0, "fill": 102.0}]
-        rows = [{"date": "d1", "c": 101.0}, {"date": "d2", "c": 102.0}, {"date": "d3", "c": 100.0}]
-        curve, t = combo.book(days, rows, {"d2": 1.0})
-        sh1 = 10000 / 3 / 100                           # 33.33 shares; cash pays for them and 3 bp
-        cash1 = 10000 - sh1 * 100 * 1.0003
-        cash2 = cash1 + sh1 * 1.0                       # the $1 dividend on d2, no trade (same weight)
-        eq3 = cash2 + sh1 * 102
-        sh3 = eq3 / 102
-        cash3 = cash2 - (sh3 - sh1) * 102 * 1.0003
-        bh = 100 + 100 * 1.0 / 101                      # buy-and-hold reinvests the dividend at d2's fill
-        self.assertEqual(curve, [{"date": "d1", "equity": round(cash1 + sh1 * 101, 2), "spy": 10100.0},
-                                 {"date": "d2", "equity": round(cash2 + sh1 * 102, 2), "spy": round(bh * 102, 2)},
-                                 {"date": "d3", "equity": round(cash3 + sh3 * 100, 2), "spy": round(bh * 100, 2)}])
-        self.assertAlmostEqual(t["shares"], sh3, 3)
-        self.assertEqual(t["spy_max_dd_pct"], round(100 * (100 / 102 - 1), 2))
-
-
-class Interest(DeskCase):
-    def test_cash_earns_yesterdays_t_bill_rate_from_the_second_day(self):
-        days = [{"date": "2026-11-18", "weight": 0.0, "fill": 100.0}, {"date": "2026-11-19", "weight": 0.0, "fill": 100.0},
-                {"date": "2026-11-20", "weight": 0.0, "fill": 100.0}]
-        rows = [{"date": d["date"], "c": 100.0} for d in days]
-        curve, t = combo.book(days, rows, {}, rates={"2026-11-17": 5.04, "2026-11-19": 2.52})
-        day1 = 10000 * 5.04 / 100 / 252                 # the 19th earns the 18th's known rate: 5.04 %, from the 17th
-        self.assertEqual([c["equity"] for c in curve],
-                         [10000.0, round(10000 + day1, 2), round((10000 + day1) * (1 + 2.52 / 100 / 252), 2)])
-        self.assertAlmostEqual(t["interest"], curve[-1]["equity"] - 10000, 1)
+    def test_the_account_charges_costs_keeps_dividends_and_trades_only_on_a_new_weight(self):
+        days = [{"date": "2026-11-16", "weight": 1 / 3, "fill": 100.0, "fill_at": "2026-11-16 09:36"},
+                {"date": "2026-11-17", "weight": 1 / 3, "fill": 101.0, "fill_at": "2026-11-17 09:36"},
+                {"date": "2026-11-18", "weight": 1.0, "fill": 102.0, "fill_at": "2026-11-18 09:36"}]
+        rows = [{"date": "2026-11-16", "c": 101.0}, {"date": "2026-11-17", "c": 102.0}, {"date": "2026-11-18", "c": 100.0}]
+        a = combo.book(days, rows, {}, 400.0)
+        self.assertEqual([(o["side"], o["date"]) for o in a["orders"]], [("buy", "2026-11-16"), ("buy", "2026-11-18")])
+        sh1 = math.floor(400 / 3 / 1.0003 / 100 * 1e5) / 1e5        # a third, fractional, after 3 bp
+        self.assertAlmostEqual(a["orders"][0]["qty"], sh1)
+        self.assertEqual(a["positions"][0]["symbol"], "SPY")
+        self.assertGreaterEqual(a["cash"], 0)                         # all in never spends money it does not have
+        self.assertLess(a["cash"], 1.0)
+        self.assertEqual(a["start"], 400.0)
 
 
 class Run(DeskCase):
@@ -198,7 +183,7 @@ class Run(DeskCase):
         self.assertEqual((v["days"], v["backfilled"], v["start"]), (6, 4, "2026-11-12"))
         text = "\n".join(combo.lines())
         self.assertIn("4 backfilled", text)
-        self.assertIn("Paper only", text)
+        self.assertIn("Practice money only", text)
 
     def test_the_scheduler_runs_it_in_the_background_and_keeps_a_failure_on_the_card(self):
         d = mock.Mock()

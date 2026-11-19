@@ -45,6 +45,10 @@ class DeskCase(unittest.TestCase):
         cb = mock.patch.object(combo, "fetch", side_effect=RuntimeError("not in tests"))
         cb.start()
         self.addCleanup(cb.stop)
+        from desk import winter3x
+        w3 = mock.patch.object(winter3x, "fetch", side_effect=RuntimeError("not in tests"))
+        w3.start()
+        self.addCleanup(w3.stop)
         lev = mock.patch.object(S, "PAPER_LEVERAGE", 1.0)        # and plain cash; test_settings.PaperBold covers 4x
         lev.start()
         self.addCleanup(lev.stop)

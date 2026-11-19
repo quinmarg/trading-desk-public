@@ -11,19 +11,14 @@ It comes from a friend's model lab (rounds 1-5, sealed tests; 2026-11-19). The l
 own numbers, 2000-2026: 7.07% a year against SPY's 8.00%, max drawdown -31% against -55%. Most of that period
 was seen data, so the clean test is this book, forward.
 
-Rules of the book:
-- a day's weight is decided from the close before it (adjusted closes, so dividends count in the averages) and
-  that day's place in the NYSE calendar;
-- it runs once a trading day from 9:35 New York. Today fills at the first price after it runs (Yahoo's latest
-  price then), not at an open that is already past. Days the desk was off are backfilled at that day's open
-  and marked "backfill";
-- the book is in real SPY prices, fractional shares, 3 basis points a side, and dividends are paid in cash
-  on the ex-date (buy-and-hold SPY reinvests them at that day's fill). Cash not in SPY earns the 13-week
-  T-bill rate (Yahoo ^IRX, the day before), as a sweep account would; without it a timing model is
-  short-changed about 1 % a year whenever it is out;
-- paper only. It never places an order, live or practice.
+Its own practice account (desk/modelacct.py, data/accounts/combo/): the same starting cash as your practice
+account, fractional SPY shares (large brokers sell them for ETFs), a market order at the first price after 9:35 New York
+plus 3 basis points a side, dividends in cash on their pay date, idle cash at a typical broker's bank sweep rate, sales
+settling the next trading day. A day's weight is decided from the close before it (adjusted closes, so dividends
+count in the averages) and that day's place in the NYSE calendar. Days the desk was off are backfilled at that
+day's open and marked "backfill". Practice money only: it never places an order.
 
-State: data/combo.json. Read-only Yahoo GETs, two a run (SPY, ^IRX).
+State: data/accounts/combo/model.json and journal.db. One read-only Yahoo GET a run (SPY).
 """
 import datetime
 import importlib.util
@@ -32,13 +27,13 @@ import urllib.error
 import urllib.request
 from zoneinfo import ZoneInfo
 
-from . import charts
-from .paths import VENDOR, home_dir
-from .skills import read_json, write_json
+from . import charts, modelacct
+from .paths import VENDOR
+from .skills import write_json
 
 NY = ZoneInfo("America/New_York")
 SYMBOL = "SPY"
-START_EQUITY = 10000.0
+NAME = "combo"
 COST_BPS = 3.0                 # a side, as in the lab
 RUN_FROM = "09:35"
 WINTER = (11, 12, 1, 2, 3, 4)  # Halloween: November to April
@@ -46,7 +41,7 @@ DIP_RSI = 10.0
 
 
 def path():
-    return home_dir() / "combo.json"
+    return modelacct.path(NAME)
 
 
 # ---------------------------------------------------------------- the NYSE calendar
@@ -221,52 +216,18 @@ def fetch(timeout=20, symbol=SYMBOL):
 
 # ---------------------------------------------------------------- the book
 
-def book(days, rows, divs, start_equity=START_EQUITY, cost_bps=COST_BPS, rates=None):
-    """Replay the recorded days: a day's interest on cash at the rate known the day before, dividends on the
-    ex-date, trade to the day's weight at its fill when the weight changed, mark at the close (or the fill, for a
-    day with no close yet). rates: {date: T-bill % a year}. Returns (curve, totals)."""
-    close = {r["date"]: r["c"] for r in rows}
-    known = sorted((rates or {}).items())
-    cash, sh, bh, w_prev, curve, interest = start_equity, 0.0, None, None, [], 0.0
-    for n, d in enumerate(days):
-        f, div = d["fill"], divs.get(d["date"], 0.0)
-        if n and cash > 0:
-            r = [v for k, v in known if k < d["date"]]
-            if r:
-                interest += cash * r[-1] / 100.0 / 252
-                cash += cash * r[-1] / 100.0 / 252
-        cash += sh * div
-        if bh is None:
-            bh = start_equity / f
-        else:
-            bh += bh * div / f
-        if d["weight"] != w_prev:
-            target = d["weight"] * (cash + sh * f) / f
-            cash -= (target - sh) * f + abs(target - sh) * f * cost_bps / 1e4
-            sh, w_prev = target, d["weight"]
-        px = close.get(d["date"], f)
-        curve.append({"date": d["date"], "equity": round(cash + sh * px, 2), "spy": round(bh * px, 2)})
-    tot = None
-    if curve:
-        def dd(xs):
-            peak, worst = xs[0], 0.0
-            for x in xs:
-                peak = max(peak, x)
-                worst = min(worst, x / peak - 1)
-            return round(100 * worst, 2)
-        last = curve[-1]
-        tot = {"equity": last["equity"], "spy": last["spy"], "shares": round(sh, 4), "cash": round(cash, 2),
-               "interest": round(interest, 2),
-               "return_pct": round(100 * (last["equity"] / start_equity - 1), 2),
-               "spy_return_pct": round(100 * (last["spy"] / start_equity - 1), 2),
-               "max_dd_pct": dd([c["equity"] for c in curve]), "spy_max_dd_pct": dd([c["spy"] for c in curve])}
-    return curve, tot
+def book(days, rows, divs, start, cost_bps=COST_BPS):
+    """The account, worked out from the recorded days (desk/modelacct.py): it trades to a day's weight at its fill
+    when the weight changed and keeps dividends in cash."""
+    return modelacct.replay([dict(d, target={SYMBOL: d["weight"]}, fills={SYMBOL: d["fill"]}) for d in days],
+                            {SYMBOL: {r["date"]: r["c"] for r in rows}}, {SYMBOL: divs}, start, {SYMBOL: cost_bps})
 
 
 # ---------------------------------------------------------------- running it
 
 def load():
-    return read_json(path(), None) or {}
+    modelacct.migrate(NAME)            # once: an old data/combo.json book moves into its own account folder
+    return modelacct.load(NAME)
 
 
 def due(now, state=None):
@@ -280,16 +241,20 @@ def due(now, state=None):
     return now[11:16] >= "16:05" and str(s.get("checked") or "") < now[:10] + " 16:05"
 
 
-def run(now, data=None, rates=None):
-    """Bring the book up to `now`: backfill missed days at their open, today at the first price after this run.
+def start_equity(s):
+    """The account's starting cash: fixed when it was made, the practice account's starting balance."""
+    if not s.get("start_equity"):
+        from . import settings as S
+        s["start_equity"] = float(S.load()["starting_balance"])
+    return s["start_equity"]
+
+
+def run(now, data=None):
+    """Bring the account up to `now`: backfill missed days at their open, today at the first price after this run.
     data: (rows, dividends, live) as parse() gives; fetched when None. Returns the saved state."""
     s = load()
+    start = start_equity(s)
     rows, divs, live = data if data is not None else fetch()
-    if rates is None:
-        try:
-            rates = {r["date"]: r["c"] for r in fetch(symbol="^IRX")[0]}
-        except Exception:                                 # no rate today: the book runs, cash just earns nothing
-            rates = {}
     today = now[:10]
     days = list(s.get("days") or [])
     first = days[-1]["date"] if days else None
@@ -311,7 +276,7 @@ def run(now, data=None, rates=None):
         else:
             fill, at, how = r["o"], d + " 09:30", "backfill"
         days.append({"date": d, "votes": v, "weight": w, "fill": round(fill, 4), "fill_at": at, "how": how})
-    curve, tot = book(days, rows, divs, rates=rates)
+    acct = book(days, rows, divs, start) if days else None
     closed = [i for i, r in enumerate(rows) if r["date"] < today or (r["date"] == today and now[11:16] >= "16:00")]
     last_i = closed[-1] if closed else None
     nxt = None
@@ -320,14 +285,16 @@ def run(now, data=None, rates=None):
         v, w = votes(marks[last_i], nd)
         nxt = {"date": nd, "votes": v, "weight": w, "from_close_of": rows[last_i]["date"]}
     m = marks[last_i] if last_i is not None else {}
-    s.update({"symbol": SYMBOL, "start_equity": START_EQUITY, "cost_bps": COST_BPS, "days": days, "curve": curve,
-              "totals": tot, "next": nxt, "checked": now, "error": None,
+    s.update({"symbol": SYMBOL, "cost_bps": COST_BPS, "days": days, "account": acct, "next": nxt, "checked": now,
+              "error": None,
               "spy": {"as_of": rows[last_i]["date"] if last_i is not None else None,
                       "close": rows[last_i]["c"] if last_i is not None else None,
                       "rsi2": round(m["rsi"], 1) if m.get("rsi") is not None else None,
                       "sma200": round(m["sma200"], 2) if m.get("sma200") else None,
                       "sma5": round(m["sma5"], 2) if m.get("sma5") else None}})
-    write_json(path(), s)
+    modelacct.save(NAME, s)
+    if acct:
+        modelacct.write_journal(NAME, acct)
     return s
 
 
@@ -335,37 +302,55 @@ def note_error(now, err):
     """A failed run is kept on the card, so a quiet Yahoo is visible."""
     s = load()
     s.update({"checked": now, "error": str(err)[:200]})
-    write_json(path(), s)
+    modelacct.save(NAME, s)
     return s
 
 
 def view():
     """What /api/combo and the Desk card show. Reads the file only: no network."""
     s = load()
-    if not s.get("days"):
+    if not s.get("days") or not s.get("account"):
         return {"started": False, "error": s.get("error"), "checked": s.get("checked"), "next": s.get("next"),
-                "note": "The combined SPY book starts on the first trading day the desk runs after 9:35 New York."}
+                "note": "The combined SPY account starts on the first trading day the desk runs after 9:35 New York."}
+    a = s["account"]
     return {"started": True, "start": s["days"][0]["date"], "today": s["days"][-1], "next": s.get("next"),
-            "totals": s.get("totals"), "spy": s.get("spy"), "checked": s.get("checked"), "error": s.get("error"),
+            "account": {k: v for k, v in a.items() if k not in ("ledger", "curve", "trades", "orders")},
+            "orders": a["orders"][-10:], "spy": s.get("spy"), "checked": s.get("checked"), "error": s.get("error"),
             "days": len(s["days"]), "backfilled": sum(1 for d in s["days"] if d.get("how") == "backfill"),
-            "curve": s.get("curve", [])[-260:], "paper_only": True}
+            "curve": a["curve"][-260:], "migrated_from": s.get("migrated_from"), "paper_only": True}
+
+
+def account_lines(a, orders):
+    """The account part of a model's review section (shared with desk/winter3x.py)."""
+    hold = ", ".join("%s %s sh ($%s)" % (p["symbol"], p["qty"], format(p["value"], ",.2f")) for p in a["positions"])
+    out = ["  Account: $%s (%+.2f%%) from $%s; buy-and-hold SPY $%s (%+.2f%%). Worst drop %.2f%% against SPY's %.2f%%."
+           % (format(a["equity"], ",.2f"), a["return_pct"], format(a["start"], ",.2f"), format(a["spy"], ",.2f"),
+              a["spy_return_pct"], a["max_dd_pct"], a["spy_max_dd_pct"]),
+           "  Holding %s; cash $%.2f ($%.2f settled)%s. Interest $%.2f at %.2f%% sweep, dividends $%.2f, costs $%.2f."
+           % (hold or "nothing", a["cash"], a["settled_cash"],
+              "".join(", $%.2f %s dividend owed on %s" % (o["amount"], o["symbol"], o["pay"]) for o in a["owed"]),
+              a["interest"], a["sweep_apy"], a["dividends"], a["costs"])]
+    if a.get("good_faith_violations"):
+        out.append("  GOOD-FAITH VIOLATIONS: %d (a purchase sold before the money that paid for it settled)."
+                   % len(a["good_faith_violations"]))
+    for o in orders[-3:]:
+        out.append("  %s %s: %s %s %s at $%.2f (%s, cost $%.2f)." % (o["date"], o["at"][11:], o["side"], o["qty"],
+                                                                     o["symbol"], o["price"], o["how"], o["cost"]))
+    return out
 
 
 def lines(v=None):
-    """The book as plain text, for the review and `python3 -m desk combo`."""
+    """The account as plain text, for the review and `python3 -m desk combo`."""
     v = view() if v is None else v
     if not v.get("started"):
         return ["  Not started yet. %s" % v["note"]] + (["  Last try: %s" % v["error"]] if v.get("error") else [])
-    t, d = v["totals"], v["today"]
+    d = v["today"]
     vt = lambda x: ", ".join("%s %s" % (k, "yes" if x[k] else "no") for k in ("dip", "halloween", "turn"))
-    out = ["  Since %s (%d trading days, %d backfilled at the open). Paper only: it never places an order."
-           % (v["start"], v["days"], v["backfilled"]),
-           "  Book $%s (%+.2f%%, $%.2f of it T-bill interest on cash), buy-and-hold SPY $%s (%+.2f%%). "
-           "Worst drop %.2f%% against SPY's %.2f%%."
-           % (format(t["equity"], ",.2f"), t["return_pct"], t.get("interest", 0.0), format(t["spy"], ",.2f"),
-              t["spy_return_pct"], t["max_dd_pct"], t["spy_max_dd_pct"]),
-           "  %s: %d%% in SPY (%s), filled at $%.2f (%s, %s)."
-           % (d["date"], round(100 * d["weight"]), vt(d["votes"]), d["fill"], d["how"], d["fill_at"][11:])]
+    out = ["  Its own practice account since %s (%d trading days, %d backfilled at the open). Practice money only: "
+           "it never places an order." % (v["start"], v["days"], v["backfilled"])]
+    out += account_lines(v["account"], v.get("orders") or [])
+    out.append("  %s: %d%% in SPY (%s), filled at $%.2f (%s, %s)."
+               % (d["date"], round(100 * d["weight"]), vt(d["votes"]), d["fill"], d["how"], d["fill_at"][11:]))
     n = v.get("next")
     if n and n["date"] != d["date"]:
         out.append("  Next (%s), from the %s close: %d%% (%s)." % (n["date"], n["from_close_of"], round(100 * n["weight"]),

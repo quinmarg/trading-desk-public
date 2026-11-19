@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.2.2 (2026-11-19)
+
+- **Each model has its own practice account.** Model 1 (opening-range breakout
+  and Claude's game plan) keeps the main one. Model 2 (combined SPY) and model 3
+  (winter 3x) trade in `data/accounts/combo/` and `data/accounts/winter3x/`
+  (`desk/modelacct.py`), each with a `model.json` record and its own
+  `journal.db`. Same starting cash as your practice account, fractional
+  shares, market orders at the first price after 9:35 plus 3/5 bp, idle cash
+  at a typical 0.01 % bank sweep, dividends paid on their pay date, T+1
+  settlement and a good-faith-violation counter. The cash can no longer go
+  below zero. `python3 -m desk migrate-models` moves older books across;
+  `--account combo` and `--account winter3x` are reserved.
+- **Winter 3x paper book** (`desk/winter3x.py`, `GET /api/winter3x`,
+  `python3 -m desk winter3x`): UPRO November to April, SPY May to October,
+  cash below the 200-day average. It did not pass its sealed test; it is a
+  forward practice record only, and leveraged funds can fall far and fast.
+- **Graph tab and review** show models 2 and 3; Desk cards show each account.
+- **Sealed beat-the-S&P research** (`research/beat_spy/`): 222 rules, developed
+  on 1961-2009, tested once on 2010-2026, with a walk-forward and nine foreign
+  indices. No finalist passed. Plus `research/compare_models.py`.
+- **Faster from candle close to ready slip** (`docs/SPEED.md`): fresh setups
+  graded side by side, short-side charts read 4 at a time during the scanner,
+  no pause between scanner reads, the loop wakes on the second a scan is due,
+  auto paper right after the scan, and the hourly catalyst gather in its own
+  thread. The busiest scan measured went from 56 s to 9.4 s. Same signals,
+  sizes, stops and targets (`tests/test_speed.py`). Every scan records a
+  `timings` dict.
+
 ## 1.2.1 (2026-11-19)
 
 - **Combined SPY model, a second paper book** (`desk/combo.py`): three

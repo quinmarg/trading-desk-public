@@ -1,0 +1,914 @@
+walk-forward 2000: F1 1.5x Nov-Apr, 0.5x May-Oct, out below 200-day avg | F3 1x above 150-day avg (band 0%), else bonds
+walk-forward 2001: F1 1x above 150-day avg (band 1%), else bonds | F3 1x above 200-day avg (band 1%), else bonds
+walk-forward 2002: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2003: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 2%), else bonds
+walk-forward 2004: F1 2x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 2%), else bonds
+walk-forward 2005: F1 2x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2006: F1 2x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2007: F1 2x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2008: F1 2x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2009: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2010: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2011: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 1%), else bonds
+walk-forward 2012: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2013: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2014: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2015: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2016: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2017: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2018: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2019: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 2%), else bonds
+walk-forward 2020: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 2%), else bonds
+walk-forward 2021: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2022: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2023: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 200-day avg (band 2%), else bonds
+walk-forward 2024: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 2%), else bonds
+walk-forward 2025: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 2%), else bonds
+walk-forward 2026: F1 3x Nov-Apr, 1x May-Oct, out below 200-day avg | F3 1x above 250-day avg (band 2%), else bonds
+index ^BSESN done
+index 000001.SS done
+index FTSEMIB.MI done
+index XU100.IS done
+index ^ISEQ done
+index PSI20.LS done
+index ^OMXC25 done
+index ^OMXH25 done
+index ^J203.JO done
+index ^RUT done
+index ^IXIC done
+{
+ "ran": "2026-11-19 14:22",
+ "seal_fingerprint": "9f7c6a5835bb398d",
+ "test": [
+  "2010-01-04",
+  "2026-11-18"
+ ],
+ "held_out": {
+  "SPY buy and hold": {
+   "cagr": 0.13778388185300838,
+   "max_dd": -0.3371725721081138,
+   "sharpe": 0.7547894850980178,
+   "vol": 0.17062703197838605,
+   "trades_yr": 0.0,
+   "avg_exp": 1.0,
+   "end": 8.801622807888695,
+   "excess_log_yr": 0.0,
+   "p": null,
+   "p_bonf": null,
+   "from_2000": {
+    "cagr": 0.08035549950533905,
+    "max_dd": -0.5518943347045914,
+    "sharpe": 0.3974296043753052,
+    "vol": 0.19242658598190543,
+    "trades_yr": 0.0,
+    "avg_exp": 1.0,
+    "end": 7.953767666735601
+   },
+   "dev_A": {
+    "cagr": 0.07593301335430214,
+    "max_dd": -0.5518943347045907,
+    "sharpe": 0.2927829080191129,
+    "vol": 0.19880796669621423,
+    "trades_yr": 0.0,
+    "avg_exp": 1.0,
+    "end": 3.4490556205033593
+   }
+  },
+  "Combined model (1x)": {
+   "cagr": 0.11127330015257808,
+   "max_dd": -0.2622411286471189,
+   "sharpe": 0.7453612992097113,
+   "vol": 0.13356667404088884,
+   "trades_yr": 12.582195007065474,
+   "avg_exp": 0.8946410767224898,
+   "end": 5.916235615340662,
+   "excess_log_yr": -0.023575932028079123,
+   "p": 0.9455272363818091,
+   "p_bonf": null,
+   "from_2000": {
+    "cagr": 0.086070893291474,
+    "max_dd": -0.2695890107758694,
+    "sharpe": 0.5372713799963587,
+    "vol": 0.13459378489049995,
+    "trades_yr": 19.41902085490312,
+    "avg_exp": 0.8281468635636876,
+    "end": 9.163303298106479
+   },
+   "dev_A": {
+    "cagr": 0.09554054003643686,
+    "max_dd": -0.26958901077586883,
+    "sharpe": 0.47615863495639865,
+    "vol": 0.13905496667985714,
+    "trades_yr": 21.753694581280786,
+    "avg_exp": 0.8070194443235857,
+    "end": 4.681460155261856
+   }
+  },
+  "F1 most return: 3x Nov-Apr, 1x May-Oct, out below 200-day avg": {
+   "cagr": 0.14201706898480304,
+   "max_dd": -0.4843124714732501,
+   "sharpe": 0.5727898824087627,
+   "vol": 0.27031210806585027,
+   "trades_yr": 9.733396137541217,
+   "avg_exp": 1.6640206226724445,
+   "end": 9.369953920259757,
+   "excess_log_yr": 0.003713650523129165,
+   "p": 0.4737631184407796,
+   "p_bonf": 1.0,
+   "from_2000": {
+    "cagr": 0.0889188886682355,
+    "max_dd": -0.49653753074760265,
+    "sharpe": 0.3846676538595959,
+    "vol": 0.2595060170400902,
+    "trades_yr": 10.026327466351132,
+    "avg_exp": 1.4577484777086673,
+    "end": 9.830296437237338
+   },
+   "dev_A": {
+    "cagr": 0.13242229361913904,
+    "max_dd": -0.496537530747603,
+    "sharpe": 0.467425911757937,
+    "vol": 0.270161964467395,
+    "trades_yr": 8.748768472906404,
+    "avg_exp": 1.4136873731778155,
+    "end": 8.196761130820471
+   }
+  },
+  "F2 best Sharpe: 1x above 250-day avg (band 2%), else bonds": {
+   "cagr": 0.08286975352737214,
+   "max_dd": -0.2532538744448991,
+   "sharpe": 0.5638860305663014,
+   "vol": 0.12974471928141645,
+   "trades_yr": 4.3918982571832315,
+   "avg_exp": 0.8561946279946282,
+   "end": 3.824563892948894,
+   "excess_log_yr": -0.0494677109017872,
+   "p": 0.992503748125937,
+   "p_bonf": 1.0,
+   "from_2000": {
+    "cagr": 0.08831404656383457,
+    "max_dd": -0.25325387444490066,
+    "sharpe": 0.5837249036110872,
+    "vol": 0.12537828363426648,
+    "trades_yr": 26.79899423162254,
+    "avg_exp": 0.756126349337066,
+    "end": 9.684847270118903
+   },
+   "dev_A": {
+    "cagr": 0.12986983459246249,
+    "max_dd": -0.25415529373737433,
+    "sharpe": 0.7346755239220221,
+    "vol": 0.13059327221111394,
+    "trades_yr": 38.48275862068965,
+    "avg_exp": 0.7284830791087714,
+    "end": 7.889763816863823
+   }
+  },
+  "F3 no leverage: 1x above 250-day avg (band 1%), else bonds": {
+   "cagr": 0.08528759827071641,
+   "max_dd": -0.23932836066508956,
+   "sharpe": 0.5813831116635354,
+   "vol": 0.12966055836058243,
+   "trades_yr": 3.679698539802167,
+   "avg_exp": 0.8599629466054001,
+   "end": 3.9710225091087885,
+   "excess_log_yr": -0.04723738777177598,
+   "p": 0.9880059970014993,
+   "p_bonf": 1.0,
+   "from_2000": {
+    "cagr": 0.08449725489478488,
+    "max_dd": -0.2393283606650901,
+    "sharpe": 0.5570014775909586,
+    "vol": 0.12500085298044306,
+    "trades_yr": 16.17630528028398,
+    "avg_exp": 0.7577482562831684,
+    "end": 8.813677099307435
+   },
+   "dev_A": {
+    "cagr": 0.11606814698126411,
+    "max_dd": -0.24125662502426248,
+    "sharpe": 0.642926543562033,
+    "vol": 0.12998073042541983,
+    "trades_yr": 22.817733990147783,
+    "avg_exp": 0.7277715345865787,
+    "end": 6.408669884356158
+   }
+  }
+ },
+ "after_tax_2010": {
+  "SPY buy and hold": {
+   "cagr": 0.13438519533065052,
+   "max_dd": -0.337172572108114,
+   "sharpe": 0.7372595273070828,
+   "vol": 0.17062364106195482,
+   "trades_yr": 0.05934997644842205,
+   "avg_exp": 1.0,
+   "end": 8.36896605379412,
+   "tax_paid_per_dollar": 0.13128262273106828
+  },
+  "Combined model (1x)": {
+   "cagr": 0.09388743598318494,
+   "max_dd": -0.26224112864711957,
+   "sharpe": 0.6190321589504997,
+   "vol": 0.13585441564828696,
+   "trades_yr": 12.641544983513896,
+   "avg_exp": 0.8946989004611852,
+   "end": 4.535842392567085,
+   "tax_paid_per_dollar": 0.6904059488873577
+  },
+  "F1 most return: 3x Nov-Apr, 1x May-Oct, out below 200-day avg": {
+   "cagr": 0.11133293190887028,
+   "max_dd": -0.5295582334473903,
+   "sharpe": 0.470287692240047,
+   "vol": 0.27284409921836245,
+   "trades_yr": 8.190296749882243,
+   "avg_exp": 1.6640339871211356,
+   "end": 5.92158700186099,
+   "tax_paid_per_dollar": 1.6771529007632322
+  },
+  "F2 best Sharpe: 1x above 250-day avg (band 2%), else bonds": {
+   "cagr": 0.070901071213334,
+   "max_dd": -0.2813056728346348,
+   "sharpe": 0.4744039693626171,
+   "vol": 0.13119452202481888,
+   "trades_yr": 1.7211493170042393,
+   "avg_exp": 0.8561994365271589,
+   "end": 3.1714143521852396,
+   "tax_paid_per_dollar": 0.33600806830517144
+  },
+  "F3 no leverage: 1x above 250-day avg (band 1%), else bonds": {
+   "cagr": 0.0729697780507419,
+   "max_dd": -0.2525045073161418,
+   "sharpe": 0.4895933505236892,
+   "vol": 0.13101940167990048,
+   "trades_yr": 2.433349034385304,
+   "avg_exp": 0.8599671516144205,
+   "end": 3.2762340729667505,
+   "tax_paid_per_dollar": 0.35032549833554744
+  }
+ },
+ "walk_forward": {
+  "picks": {
+   "F1": [
+    [
+     2000,
+     211,
+     "1.5x Nov-Apr, 0.5x May-Oct, out below 200-day avg"
+    ],
+    [
+     2001,
+     61,
+     "1x above 150-day avg (band 1%), else bonds"
+    ],
+    [
+     2002,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2003,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2004,
+     213,
+     "2x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2005,
+     213,
+     "2x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2006,
+     213,
+     "2x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2007,
+     213,
+     "2x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2008,
+     213,
+     "2x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2009,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2010,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2011,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2012,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2013,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2014,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2015,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2016,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2017,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2018,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2019,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2020,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2021,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2022,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2023,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2024,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2025,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ],
+    [
+     2026,
+     217,
+     "3x Nov-Apr, 1x May-Oct, out below 200-day avg"
+    ]
+   ],
+   "F2": [
+    [
+     2000,
+     61,
+     "1x above 150-day avg (band 1%), else bonds"
+    ],
+    [
+     2001,
+     208,
+     "1x Nov-Apr, 0x May-Oct"
+    ],
+    [
+     2002,
+     61,
+     "1x above 150-day avg (band 1%), else bonds"
+    ],
+    [
+     2003,
+     61,
+     "1x above 150-day avg (band 1%), else bonds"
+    ],
+    [
+     2004,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2005,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2006,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2007,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2008,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2009,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2010,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2011,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2012,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2013,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2014,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2015,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2016,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2017,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2018,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2019,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2020,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2021,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2022,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2023,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2024,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2025,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2026,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ]
+   ],
+   "F3": [
+    [
+     2000,
+     53,
+     "1x above 150-day avg (band 0%), else bonds"
+    ],
+    [
+     2001,
+     85,
+     "1x above 200-day avg (band 1%), else bonds"
+    ],
+    [
+     2002,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2003,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2004,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2005,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2006,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2007,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2008,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2009,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2010,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2011,
+     109,
+     "1x above 250-day avg (band 1%), else bonds"
+    ],
+    [
+     2012,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2013,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2014,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2015,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2016,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2017,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2018,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2019,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2020,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2021,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2022,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2023,
+     93,
+     "1x above 200-day avg (band 2%), else bonds"
+    ],
+    [
+     2024,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2025,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ],
+    [
+     2026,
+     117,
+     "1x above 250-day avg (band 2%), else bonds"
+    ]
+   ]
+  },
+  "F1 from 2000": {
+   "cagr": 0.10065107498979797,
+   "max_dd": -0.48431247147324985,
+   "sharpe": 0.44203865106602813,
+   "end": 13.1049084010433,
+   "excess_log_yr": 0.018611737881582154,
+   "p": 0.31634182908545727
+  },
+  "F1 from 2010": {
+   "cagr": 0.14201706898480304,
+   "max_dd": -0.4843124714732501,
+   "sharpe": 0.5727898824087627,
+   "end": 9.369953920259757,
+   "excess_log_yr": 0.003713650523129165,
+   "p": 0.4737631184407796
+  },
+  "F2 from 2000": {
+   "cagr": 0.07616699852663666,
+   "max_dd": -0.25543729977593554,
+   "sharpe": 0.4869400144537594,
+   "end": 7.166569280114974,
+   "excess_log_yr": -0.0038845003929557625,
+   "p": 0.5562218890554723
+  },
+  "F2 from 2010": {
+   "cagr": 0.08286718436286433,
+   "max_dd": -0.2532538744448992,
+   "sharpe": 0.5698600192398571,
+   "end": 3.8244110065347234,
+   "excess_log_yr": -0.04947008345633217,
+   "p": 0.993503248375812
+  },
+  "F3 from 2000": {
+   "cagr": 0.08329784450660016,
+   "max_dd": -0.22884956283440694,
+   "sharpe": 0.5531249170626823,
+   "end": 8.55585728329798,
+   "excess_log_yr": 0.002719795038502487,
+   "p": 0.447776111944028
+  },
+  "F3 from 2010": {
+   "cagr": 0.08868979434184898,
+   "max_dd": -0.22884956283440716,
+   "sharpe": 0.6066086942593227,
+   "end": 4.186062111682262,
+   "excess_log_yr": -0.044107457478893365,
+   "p": 0.9820089955022488
+  }
+ },
+ "indices": {
+  "^BSESN": {
+   "group": "foreign",
+   "from": "1998-09-22",
+   "to": "2026-11-17",
+   "bh": {
+    "cagr": 0.12589573570185064,
+    "max_dd": -0.6090513649810133,
+    "sharpe": 0.647158775140475,
+    "vol": 0.22107189235533925,
+    "trades_yr": 0.03633217993079584,
+    "avg_exp": 1.0,
+    "end": 26.147245171381705
+   },
+   "combo": {
+    "cagr": 0.11707032739395995,
+    "max_dd": -0.3857889334995709,
+    "sharpe": 0.7278317263029646,
+    "vol": 0.17257048921541135,
+    "trades_yr": 22.852941176470587,
+    "avg_exp": 0.79117029555511,
+    "end": 21.055180077756155,
+    "excess_log_yr": -0.00786944929592342
+   },
+   "F1": {
+    "cagr": 0.056837503603375916,
+    "max_dd": -0.8791108244518054,
+    "sharpe": 0.33433612638848376,
+    "vol": 0.35594837223730835,
+    "trades_yr": 22.271626297577853,
+    "avg_exp": 1.4043917755714386,
+    "end": 4.579284001128955,
+    "excess_log_yr": -0.06329796687504106
+   },
+   "F2": {
+    "cagr": 0.09777041510222606,
+    "max_dd": -0.4066657781344337,
+    "sharpe": 0.6681245349408766,
+    "vol": 0.15846673540136147,
+    "trades_yr": 3.742214532871972,
+    "avg_exp": 0.7092508915671104,
+    "end": 13.0326107830122,
+    "excess_log_yr": -0.02529770085211605
+   },
+   "F3": {
+    "cagr": 0.08567012152735942,
+    "max_dd": -0.3885074823636111,
+    "sharpe": 0.6008483106713429,
+    "vol": 0.15749809885710406,
+    "trades_yr": 11.153979238754324,
+    "avg_exp": 0.7043508293173125,
+    "end": 9.605982945341236,
+    "excess_log_yr": -0.036381508493468856
+   }
+  },
+  "000001.SS": {
+   "group": "foreign",
+   "from": "1998-09-20",
+   "to": "2026-11-17",
+   "bh": {
+    "cagr": 0.040589310811429025,
+    "max_dd": -0.7198478335287538,
+    "sharpe": 0.2881326469636844,
+    "vol": 0.23038841255075002,
+    "trades_yr": 0.03697183098591549,
+    "avg_exp": 1.0,
+    "end": 2.9333612970752525
+   },
+   "combo": {
+    "cagr": 0.08095303506732443,
+    "max_dd": -0.4552295592826111,
+    "sharpe": 0.5277276014810229,
+    "vol": 0.17752107358437094,
+    "trades_yr": 34.346830985915496,
+    "avg_exp": 0.6771090875821965,
+    "end": 8.210963676751316,
+    "excess_log_yr": 0.038055894210504586
+   },
+   "F1": {
+    "cagr": 0.10020602025165948,
+    "max_dd": -0.8511975524611665,
+    "sharpe": 0.45089614155534014,
+    "vol": 0.3514931695325444,
+    "trades_yr": 30.760563380281692,
+    "avg_exp": 1.0499579938649095,
+    "end": 13.236507605934664,
+    "excess_log_yr": 0.05571025572379306
+   },
+   "F2": {
+    "cagr": 0.055290713452418094,
+    "max_dd": -0.5750500007925097,
+    "sharpe": 0.412057159993571,
+    "vol": 0.16310111245904035,
+    "trades_yr": 17.265845070422536,
+    "avg_exp": 0.5125949486848024,
+    "end": 4.287065312028931,
+    "excess_log_yr": 0.014029089062154942
+   },
+   "F3": {
+    "cagr": 0.05530299355186319,
+    "max_dd": -0.5835601590647554,
+    "sharpe": 0.4133722245774146,
+    "vol": 0.16228493468175342,
+    "trades_yr": 34.08802816901409,
+    "avg_exp": 0.5111281163512678,
+    "end": 4.288414848820052,
+    "excess_log_yr": 0.014040725692554004
+   }
+  },
+  "FTSEMIB.MI": {
+   "group": "foreign",
+   "from": "1999-03-02",
+   "to": "2026-11-19",
+   "bh": {
+    "cagr": 0.011634542670421633,
+    "max_dd": -0.7532778542776734,
+    "sharpe": 0.16561983361139657,
+    "vol": 0.22932521256930766,
+    "trades_yr": 0.03560327776207968,
+    "avg_exp": 1.0,
+    "end": 1.3838874632618132
+   },
+   "combo": {
+    "cagr": 0.04616157272752952,
+    "max_dd": -0.3711314425304959,
+    "sharpe": 0.3698454560264251,
+    "vol": 0.1543590364568307,
+    "trades_yr": 26.560045210511444,
+    "avg_exp": 0.7244014444335641,
+    "end": 3.5520280318976556,
+    "excess_log_yr": 0.03356043914772868
+   },
+   "F1": {
+    "cagr": 0.10978349670450371,
+    "max_dd": -0.7032775802608348,
+    "sharpe": 0.49725291588202036,
+    "vol": 0.30219485826633513,
+    "trades_yr": 24.067815767165865,
+    "avg_exp": 1.245000252699716,
+    "end": 18.64750426068975,
+    "excess_log_yr": 0.0925975664850455
+   },
+   "F2": {
+    "cagr": 0.053113603716669955,
+    "max_dd": -0.23242448574188934,
+    "sharpe": 0.45404087109942665,
+    "vol": 0.13374088270608095,
+    "trades_yr": 1.3173212771969482,
+    "avg_exp": 0.6201667427452354,
+    "end": 4.278271706776529,
+    "excess_log_yr": 0.04018373130250462
+   },
+   "F3": {
+    "cagr": 0.05871112532506628,
+    "max_dd": -0.21640906399768822,
+    "sharpe": 0.49538573449042567,
+    "vol": 0.1331097795098203,
+    "trades_yr": 8.580389940661203,
+    "avg_exp": 0.6176204596963015,
+    "end": 4.965151040006239,
+    "excess_log_yr": 0.045484866988525094
+   }
+  },
+  "XU100.IS": {
+   "group": "foreign",
+   "from": "1998-09-11",
+   "to": "2026-11-19",
+   "bh": {
+    "cagr": 0.2482074530438465,
+    "max_dd": -0.634331484442624,
+    "sharpe": 0.8253506077869115,
+    "vol": 0.3376211829477053,
+    "trades_yr": 0.03580053984941042,
+    "avg_exp": 1.0,
+    "end": 489.25363803111946
+   },
+   "combo": {
+    "cagr": 0.21307207933893357,
+    "max_dd": -0.5828342160878764,
+    "sharpe": 0.8477318957017186,
+    "vol": 0.2710342491808917,
+    "trades_yr": 24.3801676374485,
+    "avg_exp": 0.776917802622157,
+    "end": 220.37685264478839,
+    "excess_log_yr": -0.028552433963470906
+   },
+   "F1": {
+    "cagr": 0.32962290211046796,
+    "max_dd": -0.9154482049033327,
+    "sharpe": 0.7763635867922254,
+    "vol": 0.5934762985775336,
+    "trades_yr": 10.09575223753374,
+    "avg_exp": 1.3915763790995757,
+    "end": 2857.925302420186,
+    "excess_log_yr": 0.06318688524968205
+   },
+   "F2": {
+    "cagr": 0.16182302609907806,
+    "max_dd": -0.6684965741491162,
+    "sharpe": 0.7213491022233701,
+    "vol": 0.25190056167442226,
+    "trades_yr": 9.12913

@@ -429,8 +429,12 @@ footer{max-width:1180px;margin:0 auto;padding:4px 20px 32px;color:var(--text3);f
           <div class="card" id="events"></div>
         </div>
         <div>
-          <h2 class="section-title">Combined SPY book</h2>
+          <h2 class="section-title">Model 2 · Combined SPY account</h2>
           <div class="card" id="combo"><p class="foot-note" style="margin:0">Loading…</p></div>
+        </div>
+        <div>
+          <h2 class="section-title">Model 3 · Winter 3x account</h2>
+          <div class="card" id="winter3x"><p class="foot-note" style="margin:0">Loading…</p></div>
         </div>
         <div>
           <h2 class="section-title">Export watchlist</h2>
@@ -511,7 +515,7 @@ footer{max-width:1180px;margin:0 auto;padding:4px 20px 32px;color:var(--text3);f
       <div class="card" id="g-all"></div>
       <h2 class="section-title">By day</h2>
       <div class="card" id="g-days"></div>
-      <p class="foot-note">Closed trades only, practice money unless the badge says LIVE. Add an account: <code>python3 -m desk --account growth --tickers "TSLA NVDA AMD"</code></p>
+      <p class="foot-note">Closed trades only, practice money unless the badge says LIVE. The two model accounts (combo, winter3x) hold for weeks, so their lines are the account's value each day less its starting cash. Add an account: <code>python3 -m desk --account growth --tickers "TSLA NVDA AMD"</code></p>
     </section>
     <section class="view" id="v-settings" aria-label="Settings">
       <h2 class="section-title">Health</h2>
@@ -783,21 +787,55 @@ async function loadCombo() {
   try { CB = await api("/api/combo"); CB_AT = Date.now(); } catch (e) { CB = {error: e.message}; }
   renderCombo();
 }
+// a model account's balance, holding, cash and record against SPY (desk/modelacct.py)
+function acctRows(a) {
+  const pctx = x => (x >= 0 ? "+" : "") + x.toFixed(2) + "%";
+  const hold = a.positions.length ? a.positions.map(p => `${p.qty} ${esc(p.symbol)} (${usd(p.value)})`).join(", ") : "Cash";
+  const owed = a.owed.map(o => `<div class="row-kv num"><span>${esc(o.symbol)} dividend, paid ${esc(o.pay)}</span><b>${usd(o.amount)}</b></div>`).join("");
+  return `<div class="row-kv num" style="margin-top:10px"><span>Account</span><b>${usd(a.equity)} (${pctx(a.return_pct)})</b></div>
+    <div class="row-kv num"><span>Holding</span><b>${hold}</b></div>
+    <div class="row-kv num"><span>Cash, settled</span><b>${usd(a.cash)}, ${usd(a.settled_cash)}</b></div>${owed}
+    <div class="row-kv num"><span>SPY, buy and hold</span><b>${usd(a.spy)} (${pctx(a.spy_return_pct)})</b></div>
+    <div class="row-kv num"><span>Worst drop, account / SPY</span><b>${a.max_dd_pct.toFixed(2)}% / ${a.spy_max_dd_pct.toFixed(2)}%</b></div>
+    ${a.good_faith_violations.length ? `<p class="foot-note" style="margin:8px 0 0;color:var(--stop)">${a.good_faith_violations.length} good-faith violation(s): a purchase was sold before the money that paid for it settled.</p>` : ""}`;
+}
 function renderCombo() {
   const c = CB || {}, box = $("#combo"), pct = w => Math.round(w * 100) + "%";
   const vt = v => [["dip", "Dip-buyer"], ["halloween", "Halloween"], ["turn", "Turn of month"]].map(([k, n]) => `<div class="row-kv num"><span>${n}</span><b>${v[k] ? "In" : "Out"}</b></div>`).join("");
-  const pctx = x => (x >= 0 ? "+" : "") + x.toFixed(2) + "%";
   if (!c.started) { box.innerHTML = `<p class="foot-note" style="margin:0">${esc(c.error ? "Last try failed: " + c.error : c.note || "Not started yet.")}</p>`; return; }
-  const d = c.today, t = c.totals, n = c.next;
+  const d = c.today, a = c.account, n = c.next;
   box.innerHTML = `<div class="row-kv num"><span>${esc(d.date)} in SPY</span><b>${pct(d.weight)}</b></div><div class="meter"><i style="width:${d.weight * 100}%"></i></div>
     ${vt(d.votes)}
     <div class="row-kv num" style="margin-top:10px"><span>Filled</span><b>${px(d.fill)} at ${esc(t12(d.fill_at.slice(11)))}${d.how === "backfill" ? " (backfill)" : ""}</b></div>
-    <div class="row-kv num"><span>Book</span><b>${usd(t.equity)} (${pctx(t.return_pct)})</b></div>
-    <div class="row-kv num"><span>Buy-and-hold SPY</span><b>${usd(t.spy)} (${pctx(t.spy_return_pct)})</b></div>
-    <div class="row-kv num"><span>Worst drop, book / SPY</span><b>${t.max_dd_pct.toFixed(2)}% / ${t.spy_max_dd_pct.toFixed(2)}%</b></div>
+    ${acctRows(a)}
     ${n && n.date !== d.date ? `<div class="row-kv num"><span>Next (${esc(n.date)})</span><b>${pct(n.weight)}</b></div>` : ""}
     ${c.error ? `<p class="foot-note" style="margin:8px 0 0;color:var(--stop)">Last try failed: ${esc(c.error)}</p>` : ""}
-    <p class="foot-note" style="margin:8px 0 0">A second paper book since ${esc(c.start)}, $10,000 start. It holds the share of three votes that say In, decided from the close before. Paper only: it never places an order. Judge it after 6 to 12 months.</p>`;
+    <p class="foot-note" style="margin:8px 0 0">Its own practice account since ${esc(c.start)}, ${usd(a.start)} start like yours, fractional SPY shares. It holds the share of three votes that say In, decided from the close before, and trades at the first price after 9:35. Practice money only: it never places an order. Judge it after 6 to 12 months.</p>`;
+}
+let W3 = null, W3_AT = 0;
+async function loadWinter3x() {
+  if (Date.now() - W3_AT < 60000 && W3) return renderWinter3x();
+  try { W3 = await api("/api/winter3x"); W3_AT = Date.now(); } catch (e) { W3 = {error: e.message}; }
+  renderWinter3x();
+}
+function renderWinter3x() {
+  const c = W3 || {}, box = $("#winter3x"), t0 = c.test || {};
+  const pctx = x => (x >= 0 ? "+" : "") + x.toFixed(2) + "%";
+  const names = {UPRO: "UPRO (3x)", SPY: "SPY (1x)", cash: "Cash (bank sweep)"};
+  const test = t0.period ? `<div class="row-kv num" style="margin-top:10px"><span>Sealed test, ${esc(t0.period)}</span><b></b></div>
+    <div class="row-kv num"><span>This rule, a year / worst drop</span><b>${t0.book.toFixed(1)}% / ${t0.book_dd.toFixed(1)}%</b></div>
+    <div class="row-kv num"><span>Old model (combined book)</span><b>${t0.combo.toFixed(1)}% / ${t0.combo_dd.toFixed(1)}%</b></div>
+    <div class="row-kv num"><span>S&amp;P 500 (SPY)</span><b>${t0.spy.toFixed(1)}% / ${t0.spy_dd.toFixed(1)}%</b></div>` : "";
+  const foot = `<p class="foot-note" style="margin:8px 0 0">Its own practice account, the same start as yours, fractional shares: UPRO from November to April and SPY from May to October while SPY is above its 200-day average, cash below it. It did not pass its sealed test (p = ${t0.p}, luck can't be ruled out) and UPRO can lose most of its value in a crash. Practice money only: it never places an order.</p>`;
+  if (!c.started) { box.innerHTML = `<p class="foot-note" style="margin:0">${esc(c.error ? "Last try failed: " + c.error : c.note || "Not started yet.")}</p>${test}${foot}`; return; }
+  const d = c.today, n = c.next, cb = c.combo;
+  box.innerHTML = `<div class="row-kv num"><span>${esc(d.date)}: rule says</span><b>${esc(names[d.hold])}</b></div>
+    <div class="row-kv num"><span>SPY over its 200-day average</span><b>${d.hold === "cash" ? "No" : "Yes"}</b></div>
+    ${acctRows(c.account)}
+    <div class="row-kv num"><span>Combined account, same days</span><b>${cb ? pctx(cb.return_pct) : "no record yet"}</b></div>
+    ${n && n.date !== d.date ? `<div class="row-kv num"><span>Next (${esc(n.date)})</span><b>${esc(names[n.hold])}</b></div>` : ""}
+    ${c.error ? `<p class="foot-note" style="margin:8px 0 0;color:var(--stop)">Last try failed: ${esc(c.error)}</p>` : ""}
+    ${test}${foot}`;
 }
 async function loadReview() { try { RV = await api("/api/review"); renderReview(); } catch (e) { $("#review").innerHTML = `<div class="callout bad">${esc(e.message)}</div>`; } }
 // ---- Catalysts tab (desk/catalysts.py): read from the state; links are https only, checked by the desk
@@ -1114,7 +1152,7 @@ document.addEventListener("paste", e => {
   readShot(exitBtn ? "trade-" + exitBtn.dataset.exit : "balance", item.getAsFile()); e.preventDefault();
 });
 
-async function load() { try { S = await api("/api/state"); render(); loadCombo(); if ($("#v-journal").classList.contains("on")) loadReview(); } catch (e) { $("#clock").textContent = "The desk is not answering. Is it still running?"; } }
+async function load() { try { S = await api("/api/state"); render(); loadCombo(); loadWinter3x(); if ($("#v-journal").classList.contains("on")) loadReview(); } catch (e) { $("#clock").textContent = "The desk is not answering. Is it still running?"; } }
 
 document.addEventListener("keydown", e => { if (e.target.id === "wl-find" && e.key === "Enter" && e.target.value.trim()) select(e.target.value); });
 document.addEventListener("input", e => {

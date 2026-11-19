@@ -8,6 +8,7 @@ import math
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from . import analyst
 from . import decide
@@ -16,7 +17,7 @@ from . import autolist
 from . import breaker
 from . import catalysts as C
 from . import changes
-from . import combo
+from . import combo, winter3x
 from . import charts
 from . import exports
 from . import graph as G
@@ -35,6 +36,7 @@ from .journal import Journal, JournalError
 from .paths import FIXTURES, account_name, data_dir
 
 MAX_EVALS_PER_SCAN = 8
+CHART_READS_AT_ONCE = 4     # short-side charts read side by side: 40 take about 2.5 s instead of 16 or more (docs/SPEED.md)
 
 
 class DeskError(ValueError):
@@ -382,13 +384,22 @@ class Desk:
                 self.j.put("last_scan", summary)
                 return summary
             st = dict(st, flat_by=self.day_flat_by(st, now))      # an early close moves flat-by up for every new signal
+            # seconds for each part (docs/SPEED.md); after_close = seconds after the 5-minute bar closed (live only)
+            summary["timings"] = tm = {"after_close": None if self.src.demo else round(time.time() % st["scan_every_seconds"], 1),
+                                       "evals": {}, "ready": []}
+            self._t0 = time.perf_counter()
             # Practice-only shorts are looked for in paper mode only; in live mode they would sit next to real slips.
             practice = shorts.status(st, self.j.equity())["paper_only"]
             shorts_on = st["directions"] != "long" and not (practice and st["mode"] == "live")
             summary["shorts_skipped"] = None if shorts_on or st["directions"] == "long" else \
                 "Short signals are practice only on this account, so the desk looks for them in paper mode only."
-            long_notes = self._scan_longs(st, now, summary) if st["directions"] != "short" else {}
-            short_notes = self._scan_shorts(st, now, summary) if shorts_on else {}
+            # Each grading runs in its own thread (its tools are separate processes), so fresh setups are graded side by
+            # side; the shorts are found and graded while the Chart Scanner still works. Signals are still saved and
+            # alerted one by one in the same order as before, so the ids and auto paper's order do not change.
+            with ThreadPoolExecutor(2 * MAX_EVALS_PER_SCAN + 1, thread_name_prefix="desk-grade") as pool:
+                found = pool.submit(self._find_shorts, st, now, summary, pool) if shorts_on else None
+                long_notes = self._scan_longs(st, now, summary, pool) if st["directions"] != "short" else {}
+                short_notes = self._record_shorts(st, now, summary, found.result()) if shorts_on else {}
             if long_notes is not None:
                 symbols = list(dict.fromkeys(list(long_notes) + list(short_notes)))
                 off = None if shorts_on else decide.note(reason=decide.OFF if st["directions"] == "long"
@@ -396,15 +407,32 @@ class Desk:
                 self.j.add_decisions([decide.row(sym, long_notes.get(sym) if st["directions"] != "short" else None,
                                                  short_notes.get(sym) if shorts_on else off)
                                       for sym in symbols], now)
+            tm["total"] = self._lap()
             self.j.put("last_scan", summary)
             return summary
 
-    def _scan_longs(self, st, now, summary):
+    def _lap(self):
+        return round(time.perf_counter() - self._t0, 2)
+
+    def _grade(self, evaluate, sym, st, **kw):
+        """One symbol through the pipeline (a pool thread), with how long it took, tool by tool."""
+        t = time.perf_counter()
+        with skills.timed() as steps:
+            status, sig = evaluate(sym, st, self.j, self.src, **kw)
+        return status, sig, dict(steps, total=round(time.perf_counter() - t, 2))
+
+    def _alerted(self, summary, sym, side):
+        """When a ready slip was saved and its phone alert started: seconds into the scan, and after the bar closed."""
+        tm = summary["timings"]
+        tm["ready"].append({"symbol": sym, "side": side, "scan_s": self._lap(),
+                            "after_close": None if tm["after_close"] is None else round(tm["after_close"] + self._lap(), 1)})
+
+    def _scan_longs(self, st, now, summary, pool):
         """Opening-range breakouts so far, then the full pipeline on the fresh ones. Returns {symbol: note},
         or None when the scanner itself failed (summary["error"] says why)."""
         wd = self.scan_dir(now)
         args = ["orb", "--or-minutes", st["or_minutes"], "--min-price", st["min_price"],
-                "--json", "--no-write", "--quiet"] + self.src.now_args()
+                "--json", "--no-write", "--quiet", "--pause", 0] + self.src.now_args()   # no 0.3 s wait between charts
         if self.src.demo:
             args += self.src.scan_offline()
         elif self._universe_due(st, now):
@@ -416,6 +444,7 @@ class Desk:
         else:
             args += ["--symbols", ",".join(self.scan_symbols(st, now))]
         r = skills.run("scanner", args, wd, timeout=900)
+        summary["timings"]["scanner"] = self._lap()
         d = r.json if isinstance(r.json, dict) else None
         if d is None:
             summary["error"] = "Scanner: %s" % r.message
@@ -454,8 +483,9 @@ class Desk:
         fresh.sort(key=lambda h: (-_at_minutes(h["at"]), -h.get("pct_over", 0)))
         for h in fresh[MAX_EVALS_PER_SCAN:]:
             notes[h["symbol"]] = decide.note(reason="not graded: more than %d fresh breakouts this scan" % MAX_EVALS_PER_SCAN)
-        for h in fresh[:MAX_EVALS_PER_SCAN]:
-            status, sig = pipeline.evaluate(h["symbol"], st, self.j, self.src, hit=h)
+        jobs = [(h, pool.submit(self._grade, pipeline.evaluate, h["symbol"], st, hit=h)) for h in fresh[:MAX_EVALS_PER_SCAN]]
+        for h, job in jobs:
+            status, sig, summary["timings"]["evals"][h["symbol"]] = job.result()
             status = analyst.grade(self.j.get("game_plan"), h["symbol"], "long", status, sig, st, now[:10])
             summary["evaluated"] += 1
             fate[h["symbol"]] = status or "no trigger: %s" % str(sig)[:120]
@@ -470,35 +500,36 @@ class Desk:
                                     % (h["symbol"], sig["qty"], sig["limit"], sig["stop"], sig["target"], sig["valid_until"]),
                                     now, h["symbol"], key="signal-%d" % sid):
                     notify.send_signal(sig, st, st["mode"], self.src.demo)   # once per signal, in the background
+                    self._alerted(summary, h["symbol"], "long")
+        summary["timings"]["longs"] = self._lap()
         summary["detail"] = [{"symbol": h["symbol"], "at": h["at"], "price": h["price"], "fate": fate.get(h["symbol"])}
                              for h in hits]
         return notes
 
-    def _scan_shorts(self, st, now, summary):
+    def _find_shorts(self, st, now, summary, pool):
         """Opening-range breakdowns (docs/SHORTING.md). The Chart Scanner skill only finds breakouts,
         so the desk reads each stock's 5-minute candles itself. Read-only, like every scan.
-        Returns {symbol: note} for every stock it looked at."""
+        Starts grading the fresh ones in the pool. Returns ({symbol: note}, [(symbol, graded job)])."""
         now_min, spend = _minutes(now[11:16]), self.spendable(st, now)
         if self.src.demo:
             symbols = sorted(p.stem for p in self.src.chart_offline("")[1].glob("*.json"))
         else:
             symbols = self.scan_symbols(st, now)
         notes, fresh = {}, []
+        wanted = [s for s in symbols if s not in st["blocked"] and not self.j.has_signal(now[:10], s, shorts.SETUP)]
+        with ThreadPoolExecutor(CHART_READS_AT_ONCE, thread_name_prefix="desk-chart") as reads:
+            got = dict(zip(wanted, reads.map(self._chart_or_error, wanted)))
         for sym in symbols:
             if sym in st["blocked"]:
                 notes[sym] = decide.note(reason="on your blocked list")
                 continue
-            if self.j.has_signal(now[:10], sym, shorts.SETUP):
+            if sym not in got:
                 notes[sym] = decide.note(reason="already signalled today")
                 continue
-            try:
-                chart = charts.intraday(self.src, sym)
-            except charts.ChartError as e:
-                notes[sym] = decide.note(reason="no candles: %s" % str(e)[:120])
+            chart = got[sym]
+            if isinstance(chart, charts.ChartError):
+                notes[sym] = decide.note(reason="no candles: %s" % str(chart)[:120])
                 continue
-            finally:
-                if not self.src.demo:
-                    time.sleep(0.2)
             _, trig, why = shorts.breakdown(charts.session_bars(chart, now), st["or_minutes"],
                                             st["no_entries_after"], st["min_volume_x"])
             if not trig:
@@ -515,11 +546,24 @@ class Desk:
                 notes[sym] = decide.note(reason="one share costs more than you can set aside")
                 continue
             fresh.append((sym, chart, trig))
+        summary["timings"]["short_charts"] = self._lap()
         fresh.sort(key=lambda f: (-_minutes(f[2]["close_time"]), -f[2]["pct_under"]))
         for sym, _, _ in fresh[MAX_EVALS_PER_SCAN:]:
             notes[sym] = decide.note(reason="not graded: more than %d fresh breakdowns this scan" % MAX_EVALS_PER_SCAN)
-        for sym, chart, _ in fresh[:MAX_EVALS_PER_SCAN]:
-            status, sig = pipeline.evaluate_short(sym, st, self.j, self.src, chart=chart)
+        return notes, [(sym, pool.submit(self._grade, pipeline.evaluate_short, sym, st, chart=chart))
+                       for sym, chart, _ in fresh[:MAX_EVALS_PER_SCAN]]
+
+    def _chart_or_error(self, sym):
+        try:
+            return charts.intraday(self.src, sym)
+        except charts.ChartError as e:
+            return e
+
+    def _record_shorts(self, st, now, summary, found):
+        """Saves the graded shorts in order, after the longs, as before. Returns {symbol: note}."""
+        notes, jobs = found
+        for sym, job in jobs:
+            status, sig, summary["timings"]["evals"][sym + ".short"] = job.result()
             status = analyst.grade(self.j.get("game_plan"), sym, "short", status, sig, st, now[:10])
             if status is None:
                 notes[sym] = decide.note(reason=str(sig)[:200])
@@ -533,6 +577,8 @@ class Desk:
                                     % (" (practice only)" if sig["paper_only"] else "", sym, sig["qty"], sig["limit"],
                                        sig["stop"], sig["target"], sig["valid_until"]), now, sym, key="signal-%d" % sid):
                     notify.send_signal(sig, st, st["mode"], self.src.demo)
+                    self._alerted(summary, sym, "short")
+        summary["timings"]["shorts"] = self._lap()
         return notes
 
     # ---- watching ----------------------------------------------------
@@ -1024,6 +1070,7 @@ class Desk:
         summ["decisions"] = decide.counts(j.decisions(limit=100000))
         summ["entry_arms"] = R.entry_arms(j.outcomes(), j.shadows(), {x["id"]: x for x in j.signals(limit=100000)})
         summ["combo"] = combo.view()
+        summ["winter3x"] = winter3x.view()
         return {"mode": mode, "now": now, "summary": summ, "text": R.report(mode, summ, now, stamp.rules_hash(st))}
 
     def graph(self):

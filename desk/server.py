@@ -9,7 +9,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import combo
+from . import combo, winter3x
 from . import settings as S
 from .engine import DeskError
 from .paths import STATIC
@@ -67,6 +67,8 @@ def make_handler(desk, scheduler=None):
                     return self._send(200, desk.review())
                 if u.path == "/api/combo":                  # read-only: the combined SPY paper book (desk/combo.py)
                     return self._send(200, combo.view())
+                if u.path == "/api/winter3x":               # read-only: the winter 3x paper book (desk/winter3x.py)
+                    return self._send(200, winter3x.view())
                 if u.path == "/api/export":                 # read-only: text for TradingView and thinkorswim
                     return self._send(200, desk.exports())
                 if u.path == "/api/export/tradingview.txt":

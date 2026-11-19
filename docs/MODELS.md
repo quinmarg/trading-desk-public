@@ -9,6 +9,9 @@ without you deciding.
 
 ## 1. The combined SPY model (a second paper book)
 
+*Since 2026-11-19 it trades its own practice account, not a $10,000 book: see section 8 for the starting cash,
+fills, cash interest, dividends and settlement now used.*
+
 **What it is.** Three votes on SPY, each 0 or 1; the book holds their average:
 
 | vote | in when |
@@ -253,3 +256,94 @@ can sit up to 100 % in cash, so this was a real bias against it.
 4. **The combined SPY book: give it real money one day?** Not before 6 to 12 months of paper next to SPY, and only
    if at all; that is your decision, not the desk's. It trades often around month turns, so taxes and real fills
    would matter. The desk will never place its orders itself.
+
+## 7. Can a rule beat the S&P? (sealed test, 2026-11-19)
+
+`research/beat_spy/REPORT.md`, chart `research/beat_spy/out/beat_spy.html`. 222 rules were tried, covering leverage
+with trend filters, volatility targeting, dual momentum, seasonality, turn of month and this combined model scaled up.
+They were developed on 1961–2009 only, three finalists were sealed, and the test ran once on SPY 2010–2026. It also
+covered a yearly walk-forward and nine foreign indices the friend's lab never used. Costs include next-open fills, real
+leveraged-fund fees, swap financing calibrated to SSO, T-bill interest and dividends, with taxes shown both ways.
+
+**No finalist passed.** The best, 3x November–April and 1x May–October with cash below the 200-day average, made 14.2 %
+a year against SPY's 13.8 %. Its worst drop was −48 % against −34 %, p = 0.47, and it lost after tax. Nothing was added
+to the desk by the pass rule.
+
+**Added afterwards on request as a third paper book**, `desk/winter3x.py`, with a Desk card that compares it with
+this combined book and buy-and-hold SPY. It holds UPRO from November to April and SPY from May to October above the
+200-day average, and cash below it. It is paper only and never places an order. It did not pass its test, so treat it
+as a forward record.
+
+This combined model made 11.1 % a year against 13.8 % in 2010–2026, with a worst drop of −26 % against −34 %.
+
+The replay there reinvests dividends. `combo.book` keeps them in cash until the weight changes, which likely explains
+most of the gap between 8.6 % and the 8.21 % in `research/compare_models.py` from 2000.
+
+## 8. Their own paper accounts (research 2026-11-19)
+
+Each model trades its own practice account by its own guide, made as realistic as possible. Model 1 (opening-range
+breakout and Claude's game plan) keeps the main practice account, unchanged. Models 2 and 3 trade in
+`data/accounts/combo/` and `data/accounts/winter3x/` (`desk/modelacct.py`). Each check below says what was found and
+what the account does about it. The broker terms are those of large U.S. brokers as read on 2026-11-19; check your
+own broker's before copying a model with real money.
+
+**Starting cash and share size: the same as your practice account, fractional shares.** Large U.S. brokers now sell
+fractional shares of thousands of U.S.-listed stocks and ETFs from $1, by dollar or share amount, with no commission
+online. Whole shares could not follow the guides on a small account: with a few hundred dollars and SPY near $720,
+model 2 could not buy one share, and 1/3 or 2/3 weights would be impossible. A made-up $10,000 balance would follow the
+weights, but its dollars would not compare with model 1 on the Graph tab. So both accounts start with
+`starting_balance` from settings and buy fractional shares, kept to 5 decimals and rounded down. Orders under $1 are
+skipped (a typical minimum). Not confirmed: whether your broker sells UPRO, a leveraged ETF, in fractions. Check it in
+the trade ticket before copying model 3 for real.
+
+**Fills.** The rules decide from the close before and act at the first price after 9:35 New York. That is
+Yahoo's latest price at that run, which can lag by seconds to 15 minutes. A fractional order is a dollar-based market
+order, so it pays the spread. SPY's quoted spread is usually one cent on about $720, under 0.1 basis point a side.
+UPRO's (about $125) is usually one to a few cents, about 1 to 2 basis points a side. The SEC fee on sales is $20.60 per
+million dollars since 2026-04-04 (sec.gov fee rate advisory 2026-2), 0.2 basis points. The guides charge 3 basis
+points a side on SPY and 5 on UPRO, which covers all three plus some of Yahoo's lag. The accounts keep the guides'
+costs, so the forward record stays comparable with the backtests. A buy is sized to the cash left after that cost, so
+the cash balance can never go below zero.
+
+**Idle cash: a typical bank sweep, 0.01 % a year.** The guides' backtests credit idle cash with the 13-week T-bill
+rate. A plain brokerage account at a large broker sweeps cash into the broker's bank at about 0.01 % APY by default;
+money funds and managed-portfolio sweeps pay about 3.3 to 3.5 %, but that is not where a brokerage account's cash goes
+by default. The accounts use 0.01 %, accrued daily and paid into cash when a new month starts (`SWEEP_APY` in
+`desk/modelacct.py`; set it to your broker's rate). This costs model 3 most, because it holds cash whenever SPY is
+under its 200-day average. To match the backtests in real life, the idle cash would have to be put in a money fund or
+T-bill ETF by hand, which the guides do not say.
+
+**Dividends: owed from the ex-date, paid on the pay date.** The shares held at the close before the ex-date earn
+it. The money arrives on the pay date. SPY (State Street page, read 2026-11-19: quarterly, expense ratio 0.0945 %)
+pays on the last trading day of the month after its ex-date month. Ex-dates fall in March, June, September and
+December, and pay dates at the end of April, July, October and January, about six weeks later. Until then the
+dividend counts in the account's value but is not cash. Model 2's guide keeps dividends in cash. Model 3's guide
+reinvests them, which it does on the pay date (free dividend reinvestment, as large brokers offer, in fractional
+shares). UPRO pays quarterly (ProShares page, 2026-11-18). The account takes its pay date as a week after the
+ex-date, a stated shortcut. Buy-and-hold SPY on each card follows the same pay-date rule.
+
+**UPRO's fee is already in its price.** ProShares lists a 0.88 % gross and net expense ratio (as of 2026-11-18, with a
+fee waiver through 2027-09-30). A fund's fee comes out of its daily value, so the Yahoo price already includes it,
+and charging it again would double count. The swap financing inside a 3x fund is in the price the same way.
+
+**Settlement and good-faith violations.** US trades settle the next business day (T+1). In a cash account, money from
+a sale can buy at once. Brokers' learning pages say a good-faith violation happens when you buy with unsettled money
+and sell that purchase before the money settles; three in 12 months typically bring 90 days of settled-cash-only
+trading. The model accounts track each sale's settlement date, let a switch (model 3 at the start of May and of
+November) buy with the unsettled proceeds, and count a violation if a purchase is sold before its money settles.
+Both models trade at most once a trading day, and money settles by the next one, so the count should stay at zero. A
+test proves the counter fires when it should. Model 1's practice account (`desk/paper.py`) settles at once in paper
+mode on purpose (`Desk.settle_date`), so auto paper can keep practising. That is unchanged.
+
+**Why not `desk/paper.py` for orders.** The practice account fills whole-share limit, stop and bracket orders against
+a half-minute quote loop. The models need one dollar-based fractional market order a day, interest, dividends and T+1.
+They use `desk/modelacct.py`, which keeps the same file-per-account layout and the same journal tables. Neither model
+imports anything that can place an order (a test checks this).
+
+**What carries over.** `python3 -m desk migrate-models` (or the first run after updating) moves an older
+`data/combo.json` or `data/winter3x.json` into the account folders, keeps the old files as `*.json.migrated`, and
+works each account out again from your `starting_balance`. Percent returns are unchanged apart from the new cash,
+dividend and cost rules. The old dollar figures were on $10,000.
+
+Sources: sec.gov/rules-regulations/fee-rate-advisories/2026-2; proshares.com UPRO page (2026-11-18); ssga.com SPY page
+(2026-11-19); large U.S. brokers' fractional-share, cash-sweep and cash-account-violation pages (2026-11-10 to 11-19).

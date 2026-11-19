@@ -41,7 +41,9 @@ cd trading-desk
 python3 -m desk --demo     # saved data from Monday 2026-10-19, no network: look around first
 python3 -m desk            # today's market, during US market hours
 python3 -m desk review     # print your record (paper and live) as text and exit
-python3 -m desk combo      # the combined SPY paper book: bring it up to date and print it
+python3 -m desk combo      # model 2, the combined SPY account: bring it up to date and print it
+python3 -m desk winter3x   # model 3, the winter 3x account, the same way
+python3 -m desk migrate-models   # once, after updating: moves older combo/winter3x books into their own accounts
 ```
 
 The dashboard opens at http://127.0.0.1:8787 and only your computer can reach
@@ -60,8 +62,8 @@ The demo keeps its data in `data-demo/`, apart from your real record in
 
 1. At 8:00 the desk picks today's stocks to scan (paper mode), lists daily-chart setups to watch, and Claude
    writes the game plan (if the `claude` command is set up).
-2. From 9:45 AM to 3:30 PM New York time it scans after every 5-minute candle
-   closes.
+2. From 9:45 AM to 3:30 PM New York time it scans 25 seconds after every 5-minute candle
+   closes. A ready slip and its phone alert usually follow 5 to 15 seconds later (`docs/SPEED.md`).
 3. A breakout that fits your account becomes a slip:
    *Buy 3 W at 110.77 or lower. Stop 108.91. Target 113.56. Good until 10:25.*
 4. If you want it, enter it at your broker as a bracket order (a buy with a
@@ -147,21 +149,52 @@ Two more things are logged for comparison only; neither changes a signal, a size
   slip's risk units, and says to wait for 20 trading days before reading anything into it.
   It also tags each long slip's real replay by SPY's side of its VWAP at the trigger, the best of nine
   playbook filters in the backtest but not yet significant (`docs/MODELS.md` section 5).
-- **The combined SPY model** (`desk/combo.py`): see below.
+- **Models 2 and 3**, the combined SPY account (`desk/combo.py`) and the winter 3x account (`desk/winter3x.py`): see below.
 
-## A second paper book: the combined SPY model
+## Three models, three practice accounts
 
-A daily model on SPY from a friend's model lab, run beside the opening-range desk as its own paper
-book. Three votes, each in or out, and the book holds their average (0, 1/3, 2/3 or all of it):
-**dip-buyer** (above the 200-day average, or RSI(2) under 10 until the close is back over the 5-day
-average), **Halloween** (November to April, or above the 200-day) and **turn of month** (last trading
-day and first 3, or above the 200-day). It decides from the close before, on dividend-adjusted closes;
-from 9:35 New York it fills today at the first price after it runs, backfills days the desk was off at
-their open, and counts dividends and T-bill interest on uninvested cash. $10,000 to start, 3 basis
-points a side, fractional shares, paper only: it never places an order. The Desk tab's **Combined SPY
-book** card shows today's weight, the votes and the book against buy-and-hold SPY; `GET /api/combo` and
-`python3 -m desk combo` give the same. State: `data/combo.json`. What the lab found, what is in-sample
-and how the opening-range results compare: [docs/MODELS.md](docs/MODELS.md).
+Each model trades only by its own rules, in its own practice account. Nothing mixes.
+
+| Model | Account | Starting cash | Trades |
+|---|---|---|---|
+| 1. Opening-range breakout + Claude's game plan | the main practice account (`data/journal.db`, `data/paper-account.json`) | your starting balance | auto paper, all day |
+| 2. Combined SPY | `data/accounts/combo/` | the same as yours | once a day, SPY |
+| 3. Winter 3x | `data/accounts/winter3x/` | the same as yours | once a day, SPY or UPRO or cash |
+
+Models 2 and 3 (`desk/modelacct.py`) work like a small cash account at a large U.S. broker. They buy
+**fractional shares** (from $1, no commission at large brokers), so a few hundred dollars can follow a
+1/3 or 2/3 weight. Each trading day from 9:35 New York they decide from the close before and trade at
+the first price after that, plus 3 basis points a side on SPY and 5 on UPRO. Idle cash earns a typical
+bank sweep rate (0.01 % a year, `SWEEP_APY`; set it to your broker's), not T-bills. A dividend is owed
+from the ex-date and paid in cash on its pay date. Money from a sale settles the next trading day, and
+a good-faith violation would be counted on the card (the rules trade at most once a day, so it should
+stay at zero). Each account has its own `journal.db` (cash ledger and trades), rebuilt from the model's
+record on every run. They show on the Graph tab as made or lost each day, in the review under
+**MODEL 2** and **MODEL 3**, and on their Desk tab cards. They never place a real order. The research
+behind each choice: [docs/MODELS.md](docs/MODELS.md) section 8.
+
+### Model 2: the combined SPY account
+
+A daily model on SPY from a friend's model lab. Three votes, each in or out, and the account holds their
+average (0, 1/3, 2/3 or all of it): **dip-buyer** (above the 200-day average, or RSI(2) under 10 until the
+close is back over the 5-day average), **Halloween** (November to April, or above the 200-day) and
+**turn of month** (last trading day and first 3, or above the 200-day). It decides from the close
+before, on dividend-adjusted closes, trades only when the weight changes, and backfills days the desk
+was off at their open. The Desk tab's **Model 2** card shows today's weight, the votes, the account
+(balance, holding, cash and settled cash) and buy-and-hold SPY from the same start. `GET /api/combo`
+and `python3 -m desk combo` give the same. What the lab found and what is in-sample:
+[docs/MODELS.md](docs/MODELS.md).
+
+### Model 3: the winter 3x account
+
+The best finalist of a sealed beat-the-S&P test ([research/beat_spy/REPORT.md](research/beat_spy/REPORT.md)), added on
+request. It holds UPRO (3x S&P 500, daily reset) from November to April and SPY from May to October while SPY is above
+its 200-day average, and cash below it. A switch sells first and buys with the unsettled money, as a cash account may.
+Dividends are reinvested on their pay date. **It did not pass its test**: in 2010-2026 it made 14.2 % a year against
+SPY's 13.8 %, with a worst drop of -48 % against -34 %, and p = 0.47. It is a forward practice record only.
+Leveraged funds carry real risks: UPRO fell about 77 % in five weeks in 2020, and daily reset lets a choppy market
+eat a 3x fund even when SPY ends flat (the report's section 4). The Desk tab's **Model 3** card compares it with
+model 2 and buy-and-hold SPY over the same days. `GET /api/winter3x` and `python3 -m desk winter3x` give the same.
 
 ## Volatile stocks (paper mode)
 
@@ -274,7 +307,8 @@ internet.
   stocks the formula already found. If Claude fails or keeps too few, the formula's picks stand.
   `python3 -m desk agent` is a dry run; add `--apply` to make the picks today's list.
 - **Graph tab**: made or lost over time for the bot, you and the total; every paper account on one
-  chart; results by day. Closed trades only.
+  chart; results by day. Closed trades only, except the two model accounts, which hold for weeks: their
+  line is the account's value each day less its starting cash.
 - **Extra paper accounts**, practice only, each with its own cash, journal and tickers in
   `data/accounts/NAME`, on the first free port from 8791:
 
@@ -470,7 +504,9 @@ desk/analyst.py     Claude's game plan: morning and hourly looks, day settings (
 desk/agent.py       the watchlist agent: Claude picks from the morning's candidates (optional)
 desk/notify.py      phone alerts for ready signals and big catalysts (ntfy)
 desk/catalysts.py   public news and events, scored, with places on the morning list
-desk/combo.py       the combined SPY model: a second paper book (docs/MODELS.md)
+desk/combo.py       model 2, the combined SPY model, in its own practice account (docs/MODELS.md)
+desk/winter3x.py    model 3, the winter 3x model, in its own practice account (research/beat_spy/REPORT.md)
+desk/modelacct.py   the practice account models 2 and 3 trade in: fractional shares, T+1, sweep, dividends
 desk/graph.py       the Graph tab: made or lost over time, every paper account
 desk/static/        the dashboard (vendor/: Lightweight Charts and two fonts, with licences)
 thinkorswim/        chart study for thinkorswim

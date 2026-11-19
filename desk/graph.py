@@ -3,11 +3,14 @@
 Reads closed trades only, from this desk's journal and from every extra paper
 account (python3 -m desk --account NAME). Other accounts' journals are opened
 read-only, so a graph never writes to a desk that is running elsewhere.
+The two model accounts (desk/modelacct.py) hold for weeks, so closed trades
+would hide most of their story: their line is the account's value each day
+less its starting cash (made or lost, open positions marked at the close).
 """
 import sqlite3
 from pathlib import Path
 
-from . import paths
+from . import modelacct, paths
 from .auto import AUTO
 
 
@@ -49,12 +52,30 @@ def curve(trades):
             "you": round(you, 2), "trades": len(trades), "wins": wins}
 
 
+MODELS = ("combo", "winter3x")
+
+
+def model_curve(name):
+    """A model account's made-or-lost line from its model.json, one point a trading day."""
+    a = modelacct.load(name).get("account") or {}
+    start, pts = a.get("start") or 0.0, a.get("curve") or []
+    closed = modelacct.journal_trades(name)
+    return {"points": [{"at": c["date"] + " 16:00", "symbol": "", "pnl": 0.0, "who": "bot",
+                        "total": round(c["equity"] - start, 2), "bot": round(c["equity"] - start, 2), "you": 0.0}
+                       for c in pts],
+            "days": [], "total": round(pts[-1]["equity"] - start, 2) if pts else 0.0,
+            "bot": round(pts[-1]["equity"] - start, 2) if pts else 0.0, "you": 0.0,
+            "trades": sum(1 for t in closed if t["status"] == "closed"),
+            "wins": sum(1 for t in closed if t["status"] == "closed" and (t["pnl"] or 0) > 0), "model": True}
+
+
 def summary(current_journal):
     """Every paper account's curve plus this desk's own record (which may be live)."""
     me = paths.account_name() or "main"
     out = []
     for name, d in paths.account_dirs().items():
         db = Path(current_journal) if name == me else d / "journal.db"
-        out.append(dict(curve(_closed(db)), name=name, current=name == me,
+        c = model_curve(name) if name in MODELS and name != me else curve(_closed(db))
+        out.append(dict(c, name=name, current=name == me,
                         live=name == me and Path(current_journal).name != "journal.db"))
     return {"accounts": out}

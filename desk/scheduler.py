@@ -5,13 +5,14 @@ import time
 import traceback
 
 from . import analyst
-from . import combo
+from . import combo, winter3x
 from . import settings as S
 from .paths import account_name
 
 CATALYSTS_EVERY = 3600   # seconds between catalyst gathers during the day (desk/catalysts.py)
 PLAN_RETRY = 900         # seconds before a failed or skipped game-plan look is tried again (desk/analyst.py)
 PAPER_EVERY = 30         # seconds between looks at the practice account's open orders
+SCAN_DELAY = 25          # seconds after a 5-minute bar closes before its scan starts; shorter reads unsettled bars (docs/SPEED.md)
 COMBO_RETRY = 900        # seconds between tries of the combined SPY book (desk/combo.py) while it is due
 
 
@@ -27,7 +28,9 @@ class Scheduler(threading.Thread):
         self.last_catalysts = 0.0
         self.last_plan_try = 0.0
         self.last_combo_try = 0.0
+        self.last_winter3x_try = 0.0
         self.wake = threading.Event()
+        self.next_slot_at = 0.0         # wall time the next live scan slot starts, so the loop wakes right on it
 
     def stop(self):
         self.stop_flag.set()
@@ -43,12 +46,15 @@ class Scheduler(threading.Thread):
         except Exception:
             self.log("%s failed:\n%s" % (name, traceback.format_exc()))
 
-    def _combo(self, now):
+    def _book(self, book, now):
         try:
-            combo.run(now)
+            book.run(now)
         except Exception as e:          # kept on the card; tried again in COMBO_RETRY seconds
-            combo.note_error(now, e)
-            self.log("%s combined book: %s" % (now, e))
+            book.note_error(now, e)
+            self.log("%s %s book: %s" % (now, book.__name__.split(".")[-1], e))
+
+    def _combo(self, now):
+        self._book(combo, now)
 
     def tick(self, wall=None):
         """One pass of the loop. Split out so the tests can drive it."""
@@ -64,7 +70,8 @@ class Scheduler(threading.Thread):
         # catalysts again each hour of the trading day, so news that breaks after 8:00 shows
         if st["catalysts"] and close and "08:00" <= now[11:16] < close and wall - self.last_catalysts >= CATALYSTS_EVERY:
             self.last_catalysts = wall
-            self._safe("catalysts", self.desk.find_catalysts)
+            threading.Thread(target=self._safe, args=("catalysts", self.desk.find_catalysts), daemon=True,
+                             name="desk-catalysts").start()      # about 20 s of reading: never in the way of a scan
         # Claude's game plan: the morning plan once the day's list is picked, then a look each hour (in the background)
         # (until 15:30, or the early close: no Claude look once the market has shut)
         if st["analyst"] and close and self.premarket_day == now[:10] and "08:00" <= now[11:16] < min("15:30", close) \
@@ -80,9 +87,14 @@ class Scheduler(threading.Thread):
         if close and not account_name() and wall - self.last_combo_try >= COMBO_RETRY and combo.due(now):
             self.last_combo_try = wall
             threading.Thread(target=self._combo, args=(now,), daemon=True, name="desk-combo").start()
-        # scan once per slot; in live a slot starts 25 seconds after each bar closes
+        # the winter 3x paper book (desk/winter3x.py), the same way
+        if close and not account_name() and wall - self.last_winter3x_try >= COMBO_RETRY and winter3x.due(now):
+            self.last_winter3x_try = wall
+            threading.Thread(target=self._book, args=(winter3x, now), daemon=True, name="desk-winter3x").start()
+        # scan once per slot; in live a slot starts SCAN_DELAY seconds after each bar closes
         every = st["scan_every_seconds"]
-        slot = "demo-" + now if self.desk.src.demo else int((wall - 25) // every)
+        slot = "demo-" + now if self.desk.src.demo else int((wall - SCAN_DELAY) // every)
+        self.next_slot_at = wall + 5 if self.desk.src.demo else (slot + 1) * every + SCAN_DELAY
         if slot != self.last_scan_slot:
             self.last_scan_slot = slot
             s = self._safe("scan", self.desk.scan)
@@ -92,11 +104,9 @@ class Scheduler(threading.Thread):
                 self.log("%s scan: %s" % (now, s.get("halt") or s.get("error") or
                                             "%d charts, %d breakouts, %d fresh, %d new signals"
                                             % (s["scanned"], s["hits"], s["fresh"], s["new_signals"])))
-        if wall - self.last_monitor >= st["monitor_every_seconds"]:
-            self.last_monitor = wall
-            self._safe("monitor", self.desk.monitor)
         # the practice account: fill paper orders the price has reached (desk/paper.py), then auto paper
-        # (desk/auto.py) follows its trades and takes new ready signals. Paper mode only.
+        # (desk/auto.py) follows its trades and takes new ready signals. Paper mode only. Right after the scan,
+        # before the monitor, so a new ready signal is taken at once.
         if st["mode"] == "paper" and wall - self.last_paper >= PAPER_EVERY:
             self.last_paper = wall
             if not self.desk.src.demo:
@@ -104,9 +114,12 @@ class Scheduler(threading.Thread):
             got = self._safe("auto paper", self.desk.auto.tick)
             if got and any(got.values()):
                 self.log("%s auto paper: %s" % (now, ", ".join("%d %s" % (v, k) for k, v in got.items() if v)))
+        if wall - self.last_monitor >= st["monitor_every_seconds"]:
+            self.last_monitor = wall
+            self._safe("monitor", self.desk.monitor)
 
     def run(self):
         while not self.stop_flag.is_set():
             self.tick()
-            self.wake.wait(5)
+            self.wake.wait(max(0.05, min(5, self.next_slot_at - time.time())))   # on the slot, not up to 5 s after it
             self.wake.clear()

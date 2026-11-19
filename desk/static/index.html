@@ -7,307 +7,428 @@
 <meta name="theme-color" content="#000000">
 <title>Trading Desk</title>
 <style>
-/* Look B, "iOS Dark": Stocks-app black, charcoal cards, iOS blue as the one accent.
-   --tint (#0A84FF, iOS dark-mode blue) is for text, icons and lines on black (5.6:1 on #000, 4.6:1 on cards).
-   --btn (#0071E3) sits behind white text, where #0A84FF would only reach 3.6:1; this gives 4.7:1. */
+/* Hallmark audit 2026-11-19 · app screen · reference: TradingView · signature: Claude's bias tag on every listed stock
+   critique: chart-first workspace; chrome quiet, the chart carries the colour
+   waive 19: "–" is the empty-number placeholder in data cells, not copy
+   waive 56: .pane-head is sticky inside its own scrolling pane, not the page */
+/* Trading Desk, "Workspace": a TradingView-style dark workspace (2026-11-19).
+   Layout, density and chart-first hierarchy follow TradingView; colours, type and marks are the desk's own.
+   Tokens are OKLCH. Text tokens are checked for 4.5:1 on --bg and --panel; the legacy names (--card, --label...)
+   alias them so every tab keeps working. Fonts are self-hosted (desk/static/vendor, OFL). */
+@font-face{font-family:"Geist";src:url(vendor/geist.woff2) format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"Schibsted Grotesk";src:url(vendor/schibsted-grotesk.woff2) format("woff2");font-weight:400 900;font-display:swap}
 :root{
-  --bg:#000000; --card:#1C1C1E; --card2:#2C2C2E; --fill:#3A3A3C;
-  --label:#FFFFFF; --label2:rgba(235,235,245,.68); --sep:rgba(84,84,88,.65);
-  --tint:#0A84FF; --btn:#0071E3; --onTint:#FFFFFF;
-  --go:#30D158; --goBg:rgba(48,209,88,.15);
-  --stop:#FF6961; --stopBg:rgba(255,69,58,.15);
-  --warn:#FFB340; --warnBg:rgba(255,179,64,.14);
-  --blue:#DA8FFF;
-  --bar:rgba(22,22,24,.82);
-  --r-card:20px; --r-inner:13px;
-  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",system-ui,sans-serif;
-  --display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",system-ui,sans-serif;
+  --bg:oklch(0.155 0.012 262); --panel:oklch(0.19 0.014 262); --panel2:oklch(0.235 0.016 262); --raise:oklch(0.28 0.018 262);
+  --line:oklch(0.85 0.03 262 / 0.11); --line2:oklch(0.85 0.03 262 / 0.2);
+  --text:oklch(0.965 0.006 262); --text2:oklch(0.76 0.018 262); --text3:oklch(0.64 0.02 262);
+  --accent:oklch(0.66 0.19 262); --accent-ink:oklch(0.76 0.14 262); --accent-bg:oklch(0.66 0.19 262 / 0.16);
+  --up:#2EBD85; --upBg:oklch(0.7 0.14 160 / 0.15); --down:#F6465D; --downBg:oklch(0.65 0.2 18 / 0.15);
+  --amber:oklch(0.83 0.13 85); --amberBg:oklch(0.83 0.13 85 / 0.13);
+  --violet:oklch(0.75 0.13 305); --violetBg:oklch(0.75 0.13 305 / 0.15);
+  /* legacy names */
+  --card:var(--panel); --card2:var(--panel2); --fill:var(--raise); --label:var(--text); --label2:var(--text2); --sep:var(--line);
+  --tint:var(--accent-ink); --btn:oklch(0.55 0.2 262); --onTint:#fff; --go:var(--up); --goBg:var(--upBg); --stop:var(--down); --stopBg:var(--downBg);
+  --warn:var(--amber); --warnBg:var(--amberBg); --blue:var(--violet); --bar:var(--panel);
+  --r:8px; --r-sm:6px; --r-card:10px; --r-inner:7px;
+  --font:"Geist",-apple-system,BlinkMacSystemFont,system-ui,sans-serif; --display:"Schibsted Grotesk","Geist",system-ui,sans-serif;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --bg-top:oklch(0.185 0.016 262); --select:oklch(0.66 0.19 262 / .35); --bar-glass:oklch(0.17 0.014 262 / .92); --hover:oklch(0.85 0.03 262 / .06); --hover2:oklch(0.85 0.03 262 / .05); --muted-bg:oklch(0.85 0.03 262 / .08); --head-glass:oklch(0.155 0.012 262 / .94); --btn-hover:oklch(0.6 0.2 262); --on-violet:oklch(0.2 0.05 305); --bad-ink:oklch(0.82 0.1 18); --on-up:#04140C; --on-amber:oklch(0.2 0.04 85); --scrim:rgb(4 6 12 / .65); --err-bg:oklch(0.3 0.08 18); --err-ink:oklch(0.9 0.06 18); --shadow-sm:rgb(0 0 0 / .4); --shadow-lg:rgb(0 0 0 / .55); --shadow-md:rgb(0 0 0 / .5);
 }
 *{box-sizing:border-box}
-html{background:var(--bg);-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--label);font:16px/1.38 var(--font);-webkit-font-smoothing:antialiased}
+html{overflow-x:clip;background:var(--bg);-webkit-text-size-adjust:100%;color-scheme:dark}
+body{overflow-x:clip;margin:0;min-height:100dvh;color:var(--text);font:14.5px/1.45 var(--font);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 0;
+  background:linear-gradient(180deg in oklch, var(--bg-top), transparent 420px), var(--bg)}
+::selection{background:var(--select);color:var(--text)}
+*{scrollbar-width:thin;scrollbar-color:var(--raise) transparent}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--raise);border-radius:8px;border:3px solid var(--bg)}
+input,textarea{caret-color:var(--accent-ink)}
 button,input,select,textarea{font:inherit;color:inherit}
 [hidden]{display:none!important}
-:focus-visible{outline:2px solid var(--tint);outline-offset:2px;border-radius:8px}
-.num{font-variant-numeric:tabular-nums}
-a{color:var(--tint)}
-.skip{position:absolute;left:-999px;top:8px;background:var(--btn);color:var(--onTint);padding:8px 14px;border-radius:10px;z-index:20}
+:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px;border-radius:var(--r-sm)}
+.num,table,.row-kv,.li b{font-variant-numeric:tabular-nums}
+a{color:var(--accent-ink);text-underline-offset:3px}
+.skip{position:absolute;left:-999px;top:8px;background:var(--btn);color:var(--onTint);padding:8px 16px;border-radius:var(--r);z-index:40}
 .skip:focus{left:12px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
-/* page frame */
-.wrap{max-width:1180px;margin:0 auto;padding:max(10px,env(safe-area-inset-top)) 16px 120px}
-.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 2px 0}
-.greet{color:var(--label2);font-size:15px;font-weight:500}
-.greet b{color:var(--label);font-weight:600}
-.mode-badge{margin-left:auto;font-size:12.5px;font-weight:700;letter-spacing:.04em;padding:5px 11px;border-radius:999px;white-space:nowrap;background:rgba(218,143,255,.16);color:var(--blue)}
-.mode-badge.live{background:var(--go);color:#00210A}
-.mark{width:38px;height:38px;border-radius:50%;background:var(--card);display:grid;place-items:center;flex:none}
-.mark svg{width:26px;height:26px}
-.large{font:700 34px/1.12 var(--display);letter-spacing:.005em;margin:2px 2px 14px}
-.clock{font-size:14px;color:var(--label2);margin:-10px 2px 14px}
-
-/* tabs: a bottom bar on phones, a floating pill on wide screens */
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;justify-content:space-around;
-  padding:6px 8px max(8px,env(safe-area-inset-bottom));background:var(--bar);
-  -webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--sep)}
-.tabs button{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:2px;
-  min-width:60px;flex:1;max-width:96px;min-height:48px;padding:4px 2px;font-size:11px;font-weight:500;color:var(--label2);cursor:pointer}
-.tabs button svg{width:26px;height:26px}
-.tabs button[aria-selected=true]{color:var(--tint)}
-@media(min-width:900px){
-  .tabs{position:sticky;top:12px;bottom:auto;left:auto;right:auto;margin:0 auto 18px;width:max-content;border:.5px solid var(--sep);
-    border-radius:999px;padding:5px;gap:2px}
-  .tabs button{flex-direction:row;gap:7px;min-height:38px;padding:0 16px;border-radius:999px;font-size:14.5px;font-weight:600}
-  .tabs button svg{width:19px;height:19px}
-  .tabs button[aria-selected=true]{background:var(--fill);color:var(--label)}
-  .tabs button[aria-selected=true] svg{color:var(--tint)}
-  .wrap{padding-bottom:48px}
+/* top bar: brand, sections, clock, account, mode */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;height:52px;padding:0 16px;
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:8px;flex:none}
+.mark{width:28px;height:28px;display:grid;place-items:center;flex:none}
+.mark svg{width:24px;height:24px}
+.brand-name{font:600 15.5px/1 var(--display);letter-spacing:-.005em;white-space:nowrap}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;height:100%;align-items:stretch}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{position:relative;background:none;border:0;display:flex;align-items:center;gap:8px;padding:0 12px;min-height:44px;
+  font-size:14px;font-weight:550;color:var(--text2);cursor:pointer;white-space:nowrap;border-radius:var(--r-sm)}
+.tabs button svg{width:17px;height:17px}
+.tabs button:hover{color:var(--text);background:var(--hover)}
+.tabs button[aria-selected=true]{color:var(--text)}
+.tabs button[aria-selected=true]::after{content:"";position:absolute;left:10px;right:10px;bottom:-4px;height:2px;border-radius:2px;background:var(--accent)}
+.top-right{display:flex;align-items:center;gap:12px;flex:none}
+.clock{font-size:13px;color:var(--text2);white-space:nowrap}
+.clock b{color:var(--text);font-weight:600}
+.equity{font:600 14px/1 var(--font);white-space:nowrap}
+.mode-badge{font-size:12px;font-weight:600;letter-spacing:.02em;padding:4px 8px;border-radius:var(--r-sm);white-space:nowrap;background:var(--violetBg);color:var(--violet)}
+.mode-badge.live{background:var(--up);color:var(--on-up)}
+.greet{display:none}
+@media(max-width:899px){
+  .top{flex-wrap:wrap;height:auto;padding:8px 12px 0;gap:8px 12px}
+  .tabs{order:3;flex-basis:100%;height:44px}
+  .brand-name{display:none}
+  .clock .wordy{display:none}
 }
 
+/* page frame: the Desk is a full-width workspace, the other tabs a centred column */
+.wrap{min-height:100dvh}
+main{padding:0}
 .view{display:none}.view.on{display:block}
-.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:0 22px;align-items:start}
+.view:not(#v-desk){max-width:1180px;margin:0 auto;padding:20px 16px 60px}
+.large{font:600 26px/1.15 var(--display);letter-spacing:-.01em;margin:4px 0 16px}
+.demo-banner{background:var(--amber);color:var(--on-amber);padding:12px 16px;font-size:14px;line-height:1.35}
+.demo-banner b{font-weight:600}
+
+/* the workspace */
+.ws{display:grid;grid-template-columns:272px minmax(0,1fr) 384px;height:calc(100dvh - 52px);border-bottom:1px solid var(--line)}
+.ws > *{min-width:0;min-height:0;overflow:auto}
+.pane{background:var(--bg)}
+.pane + .pane{border-left:1px solid var(--line)}
+.pane-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px 12px;
+  background:var(--bg);border-bottom:1px solid var(--line)}
+.pane-head h2,.section-title,.large{text-wrap:balance}
+.pane-head h2{font:600 14px/1.2 var(--display);margin:0;letter-spacing:.005em}
+.pane-head small{font-size:12px;color:var(--text3)}
+.pane-body{padding:12px 16px 20px}
+@media(max-width:1279px){.ws{grid-template-columns:236px minmax(0,1fr) 344px}}
+@media(max-width:1023px){.ws{grid-template-columns:220px minmax(0,1fr)}.ws .right{grid-column:1 / -1;border-left:0;border-top:1px solid var(--line)}
+  .ws{height:auto}.ws > .pane{max-height:none}.center{height:min(78dvh,720px)}.watchpane{max-height:min(78dvh,720px)}}
+@media(max-width:699px){.ws{grid-template-columns:minmax(0,1fr)}.pane + .pane{border-left:0;border-top:1px solid var(--line)}
+  .center{order:-1;height:auto}.watchpane{max-height:420px}}
+
+/* watchlist */
+.wl-tools{display:flex;gap:8px;padding:12px 16px 0}
+.wl-tools input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;min-height:36px;font-size:13.5px}
+.wl-tools input:focus{outline:none;border-color:var(--accent)}
+.wl-cols{display:grid;grid-template-columns:minmax(0,1fr) 58px 52px;gap:8px;padding:12px 16px 8px;font-size:11.5px;color:var(--text3);font-weight:550}
+.wl-cols span:not(:first-child){text-align:right}
+.wl-row{display:grid;grid-template-columns:minmax(0,1fr) 58px 52px;gap:8px;align-items:center;width:100%;text-align:left;background:none;border:0;
+  border-top:1px solid var(--line);padding:8px 16px;min-height:46px;cursor:pointer;color:var(--text)}
+.wl-row:hover{background:var(--hover2)}
+.wl-row[aria-current=true]{background:var(--accent-bg);box-shadow:inset 2px 0 0 var(--accent)}
+.wl-sym{font-weight:600;font-size:14px;letter-spacing:.005em}
+.wl-why{display:block;font-size:11.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.wl-atr{text-align:right;font-size:13px;color:var(--text2)}
+.bias{justify-self:end;font-size:11.5px;font-weight:600;padding:4px 8px;border-radius:5px;letter-spacing:.02em;white-space:nowrap}
+.bias.long{background:var(--upBg);color:var(--up)} .bias.short{background:var(--downBg);color:var(--down)}
+.bias.avoid{background:var(--muted-bg);color:var(--text3)} .bias.none{color:var(--text3)}
+.wl-row.avoid .wl-sym{color:var(--text2)}
+.src{display:inline-block;margin-left:4px;font-size:10.5px;font-weight:600;color:var(--accent-ink);vertical-align:1px}
+
+/* chart */
+.center{display:flex;flex-direction:column;overflow:hidden}
+.ch-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ch-sym{font:600 20px/1 var(--display);letter-spacing:-.01em}
+.ch-last{font-size:15px;font-weight:600}
+.ch-sub{font-size:12.5px;color:var(--text2)}
+.ch-bar .grow{flex:1}
+.ivl{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px}
+.ivl button{border:0;background:none;border-radius:4px;padding:4px 12px;min-height:32px;min-width:40px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer}
+.ivl button[aria-pressed=true]{background:var(--raise);color:var(--text)}
+.ch-wrap{position:relative;flex:1;min-height:320px}
+#chart{position:absolute;inset:0}
+.ch-msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--text2);font-size:14px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--text2)}
+.legend span{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.legend i{width:14px;height:2px;border-radius:1px;display:inline-block}
+.legend b{color:var(--text);font-weight:600}
+.thesis{padding:12px 16px 16px;border-top:1px solid var(--line);font-size:14px}
+.thesis h3{font:600 13.5px/1.2 var(--display);margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.thesis p{margin:0 0 8px;max-width:72ch}
+.thesis dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:8px 0 0;font-size:13px}
+.thesis dt{color:var(--text3)} .thesis dd{margin:0;color:var(--text2)}
+
+/* plan card */
+.plan-mood{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.mood{font-size:12px;font-weight:600;padding:4px 8px;border-radius:5px}
+.mood.risk-on{background:var(--upBg);color:var(--up)} .mood.risk-off{background:var(--downBg);color:var(--down)} .mood.mixed{background:var(--amberBg);color:var(--amber)}
+.plan-sum{font-size:13.5px;color:var(--text2);margin:0 0 12px}
+.plan-split{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.plan-split div{background:var(--panel2);border-radius:var(--r-inner);padding:8px 12px}
+.plan-split b{display:block;font:600 18px/1.1 var(--display)} .plan-split small{font-size:11.5px;color:var(--text2)}
+ul.watchfor{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--text2)} ul.watchfor li{margin:4px 0}
+.dayset{margin-top:12px;font-size:13px;color:var(--text2)} .dayset b{color:var(--text);font-weight:600}
+
+/* cards and sections (other tabs, and the right pane) */
+.grid{display:grid;grid-template-columns:minmax(0,1fr);gap:0 24px;align-items:start}
 @media(min-width:900px){.grid{grid-template-columns:minmax(0,1fr) 340px}}
-
-/* cards */
-.card{background:var(--card);border-radius:var(--r-card);padding:16px;margin-bottom:12px}
-.section-title{font:600 20px/1.2 var(--display);margin:22px 2px 10px}
-.section-title:first-child{margin-top:4px}
-.foot-note{font-size:13px;color:var(--label2);margin:8px 2px 0}
-
-/* account card */
-.hero .cap{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--label2);font-size:14px;font-weight:500}
-.hero .big{font:700 40px/1.1 var(--display);letter-spacing:-.01em;margin:4px 0 2px}
-.hero .three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
-.hero .three b{display:block;font-size:18px;font-weight:600}
-.hero .three span{font-size:12.5px;color:var(--label2)}
-.chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:4px 10px;border-radius:999px;background:var(--warnBg);color:var(--warn);white-space:nowrap}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);padding:16px;margin-bottom:12px}
+.section-title{font:600 16px/1.2 var(--display);margin:24px 0 12px;letter-spacing:-.003em}
+.section-title:first-child{margin-top:2px}
+.foot-note{font-size:12.5px;color:var(--text2);margin:8px 0 0}
+.below{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 16px;padding:8px 16px 40px;max-width:1600px}
+.cap .btn{white-space:nowrap;flex:none}
+.cap{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--text2);font-size:13px;font-weight:550}
+.acct{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.acct div{background:var(--bg);padding:12px 16px}
+.acct b{display:block;font:600 16px/1.2 var(--font)} .acct span{font-size:11.5px;color:var(--text2);white-space:nowrap}
+.acct div{padding:12px 12px}
+.chip{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:4px 8px;border-radius:5px;background:var(--warnBg);color:var(--warn);white-space:nowrap}
 .chip.live{background:var(--goBg);color:var(--go)}
-.chip i{width:7px;height:7px;border-radius:50%;background:currentColor}
-
-/* status line */
-.status{display:flex;gap:12px;align-items:center}
-.status .grow{flex:1;min-width:0;font-size:14.5px;color:var(--label2)}
-.status .grow b{color:var(--label);font-weight:600}
-.status.halt{background:var(--warnBg)}
+.chip i{width:6px;height:6px;border-radius:50%;background:currentColor}
+.status{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.status .grow{flex:1 1 200px;min-width:0;font-size:13.5px;color:var(--text2)}
+.status .grow b{color:var(--text);font-weight:600}
+.status.halt{background:var(--warnBg);border-color:transparent}
 .status.halt .grow,.status.halt .grow b{color:var(--warn)}
 
-/* buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:14px;padding:12px 18px;min-height:44px;
-  font-weight:600;font-size:16px;cursor:pointer;background:var(--btn);color:var(--onTint)}
+/* buttons: 8px radius, never pills */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;border-radius:var(--r);padding:8px 16px;min-height:40px;
+  font-weight:600;font-size:14px;cursor:pointer;background:var(--btn);color:var(--onTint)}
+.btn:hover{background:var(--btn-hover)}
+.btn:active{transform:translateY(1px)}
 .btn.wide{width:100%}
-.btn.gray{background:var(--fill);color:var(--label)}
-.btn.small{padding:8px 14px;min-height:36px;font-size:14.5px;border-radius:999px}
-.btn.text{background:none;color:var(--tint);padding:8px 10px;min-height:40px}
-.btn:disabled{opacity:.45;cursor:default}
+.btn.gray{background:var(--panel2);border-color:var(--line);color:var(--text)}
+.btn.gray:hover{background:var(--raise)}
+.btn.small{padding:8px 12px;min-height:34px;font-size:13px;border-radius:var(--r-sm)}
+.btn.text{background:none;color:var(--accent-ink);padding:8px 8px;min-height:36px}
+.btn.text:hover{background:var(--accent-bg)}
+.btn:disabled{background:var(--panel2);color:var(--text3);border-color:var(--line);cursor:not-allowed;transform:none}
 a.btn{text-decoration:none}
-a.chart-link{display:inline-flex;align-items:center;min-height:40px;margin-top:6px;color:var(--tint);font-size:14.5px;font-weight:500;text-decoration:none}
+a.chart-link{display:inline-flex;align-items:center;min-height:36px;margin-top:4px;color:var(--accent-ink);font-size:13.5px;font-weight:550;text-decoration:none}
 a.chart-link:hover{text-decoration:underline}
-.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-#export-text{width:100%;margin-top:10px;font-family:ui-monospace,Menlo,monospace;font-size:14px}
+#export-text{width:100%;margin-top:12px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
 
-/* segmented control */
-.seg{display:flex;background:var(--card2);border-radius:10px;padding:2px;margin:4px 0 14px}
-.seg button{flex:1;border:0;background:none;border-radius:8px;padding:7px 4px;min-height:34px;font-size:14px;font-weight:600;color:var(--label);cursor:pointer}
-.seg button[aria-pressed=true]{background:#636366}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:2px;margin:12px 0 12px}
+.seg button{flex:1;border:0;background:none;border-radius:4px;padding:8px 4px;min-height:32px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--raise);color:var(--text)}
 
-/* signal card */
-.sig.dim{opacity:.72}
+/* signal slip */
+.sig.dim{opacity:.7}
 .chead{display:flex;align-items:center;gap:12px}
-.logo{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-weight:700;font-size:15px;flex:none;background:var(--fill);color:var(--label)}
+.logo{width:36px;height:36px;border-radius:var(--r);display:grid;place-items:center;font-weight:600;font-size:13px;flex:none;background:var(--raise);color:var(--text)}
 .sig.ready .logo{background:var(--btn);color:var(--onTint)}
-.sig.taken .logo,.sig.open .logo{background:var(--blue);color:#1D0B26}
-.ticker{font:700 21px/1.1 var(--display);letter-spacing:-.01em}
-.sub{font-size:13.5px;color:var(--label2);margin-top:2px}
-.pill{margin-left:auto;font-size:13px;font-weight:700;padding:5px 11px;border-radius:999px;white-space:nowrap;background:var(--fill);color:var(--label2)}
-.pill.go{background:var(--goBg);color:var(--go)} .pill.weak{background:var(--warnBg);color:var(--warn)} .pill.open{background:rgba(218,143,255,.15);color:var(--blue)}
-.order{font-size:18px;font-weight:600;margin:14px 0 10px;line-height:1.3}
-.order em{font-style:normal;color:var(--tint)}
-
-.list{background:var(--card2);border-radius:var(--r-inner);overflow:hidden}
-.li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 14px;font-size:15.5px;min-height:44px}
-.li + .li{border-top:.5px solid var(--sep)}
-.li > span{color:var(--label2)} .li > b{font-weight:600;text-align:right}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:9px;vertical-align:1px}
-
-.pl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.pl div{border-radius:var(--r-inner);padding:10px 13px}
+.sig.taken .logo,.sig.open .logo{background:var(--violet);color:var(--on-violet)}
+.ticker{font:600 17px/1.1 var(--display);letter-spacing:-.005em}
+.ticker button{all:unset;cursor:pointer} .ticker button:hover{color:var(--accent-ink)}
+.sub{font-size:12.5px;color:var(--text2);margin-top:2px}
+.pill{margin-left:auto;font-size:12px;font-weight:600;padding:4px 8px;border-radius:5px;white-space:nowrap;background:var(--raise);color:var(--text2)}
+.pill.go{background:var(--goBg);color:var(--go)} .pill.weak{background:var(--warnBg);color:var(--warn)} .pill.open{background:var(--violetBg);color:var(--violet)}
+.order{font-size:16px;font-weight:600;margin:12px 0 8px;line-height:1.3}
+.order em{font-style:normal;color:var(--accent-ink)}
+.planline{display:flex;gap:8px;align-items:baseline;font-size:13px;color:var(--text2);margin:0 0 8px}
+.list{background:var(--panel2);border-radius:var(--r-inner);overflow:hidden}
+.li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 12px;font-size:14px;min-height:38px}
+.li + .li{border-top:1px solid var(--line)}
+.li > span{color:var(--text2)} .li > b{font-weight:600;text-align:right}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:1px}
+.pl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.pl div{border-radius:var(--r-inner);padding:8px 12px}
 .pl .l{background:var(--stopBg)} .pl .w{background:var(--goBg)}
-.pl small{display:block;font-size:12.5px;color:var(--label2)} .pl b{font-size:19px;font-weight:700}
+.pl small{display:block;font-size:11.5px;color:var(--text2)} .pl b{font-size:16px;font-weight:600}
 .pos{color:var(--go)} .neg{color:var(--stop)}
-
-.callout{border-radius:var(--r-inner);padding:10px 13px;margin:10px 0 0;font-size:14.5px;background:var(--warnBg);color:var(--warn)}
-.callout.bad{background:var(--stopBg);color:var(--stop)}
-/* short side: a red SHORT label and an amber PRACTICE ONLY label (this account cannot short for real), always in words */
-.side-tag{display:inline-block;margin-left:7px;padding:2px 7px;border-radius:6px;font-size:11.5px;font-weight:700;letter-spacing:.04em;vertical-align:2px;background:var(--stopBg);color:var(--stop)}
+.callout{border-radius:var(--r-inner);padding:8px 12px;margin:8px 0 0;font-size:13.5px;background:var(--warnBg);color:var(--warn)}
+.callout.bad{background:var(--stopBg);color:var(--bad-ink)}
+.side-tag{display:inline-block;margin-left:8px;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:.03em;vertical-align:2px;background:var(--stopBg);color:var(--stop)}
 .side-tag.paper{background:var(--warnBg);color:var(--warn)}
-.facts{margin:6px 0 0;padding-left:20px;font-size:14.5px;color:var(--label2)} .facts li{margin:5px 0}
-
+.facts{margin:8px 0 0;padding-left:20px;font-size:13.5px;color:var(--text2)} .facts li{margin:4px 0}
 .odds{margin-top:12px}
-.odds-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--fill)}
+.odds-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--raise)}
 .odds-bar div{height:100%}
-.odds-key{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--label2);margin-top:7px}
-.odds-key b{color:var(--label);font-weight:600}
-.verdict{font-size:14px;color:var(--label2);margin:8px 0 0}
-
-.timer{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;color:var(--label2)}
+.odds-key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12.5px;color:var(--text2);margin-top:8px}
+.odds-key b{color:var(--text);font-weight:600}
+.verdict{font-size:13px;color:var(--text2);margin:8px 0 0}
+.timer{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--text2)}
 .timer.soon{color:var(--stop)}
-.ring{width:20px;height:20px;flex:none;color:var(--tint)}
+.ring{width:18px;height:18px;flex:none;color:var(--accent-ink)}
 .timer.soon .ring{color:var(--stop)}
-
 .fill{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-.field{background:var(--card2);border-radius:var(--r-inner);padding:8px 13px}
-.field span{display:block;font-size:12.5px;color:var(--label2)}
-.field input,.field select{width:100%;background:none;border:0;padding:2px 0;font-size:17px;font-weight:600;outline:none}
-.field:focus-within{box-shadow:0 0 0 2px var(--tint)}
-.actions{display:flex;gap:8px;margin-top:10px;align-items:center}
+.field{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-inner);padding:8px 12px}
+.field span{display:block;font-size:11.5px;color:var(--text2)}
+.field input,.field select{width:100%;background:none;border:0;padding:2px 0;font-size:15px;font-weight:600;outline:none}
+.field:focus-within{outline:2px solid var(--accent-ink);outline-offset:1px}
+.actions{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
 .actions .btn:first-child{flex:1}
-
-details.disc{margin-top:10px;background:var(--card2);border-radius:var(--r-inner)}
-details.disc summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;min-height:44px;font-size:15.5px;font-weight:500}
+details.disc{margin-top:8px;background:var(--panel2);border-radius:var(--r-inner)}
+details.disc summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:8px 12px;min-height:40px;font-size:13.5px;font-weight:550}
 details.disc summary::-webkit-details-marker{display:none}
-details.disc summary::after{content:"";width:8px;height:8px;border-right:2px solid var(--label2);border-bottom:2px solid var(--label2);transform:rotate(-45deg);margin-right:4px}
+details.disc summary::after{content:"";width:7px;height:7px;border-right:1.5px solid var(--text2);border-bottom:1.5px solid var(--text2);transform:rotate(-45deg);margin-right:4px}
 details.disc[open] summary::after{transform:rotate(45deg)}
-details.disc .inner{padding:0 14px 12px;font-size:14.5px;color:var(--label2)}
-pre.report{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--label)}
-dl.rule{margin:0} dl.rule div{padding:7px 0;border-top:.5px solid var(--sep)} dl.rule div:first-child{border-top:0;padding-top:0}
-dl.rule dt{font-size:12.5px;font-weight:600;color:var(--label2)} dl.rule dd{margin:1px 0 0;color:var(--label)}
-ol.steps{margin:0;padding-left:20px} ol.steps li{margin:6px 0;color:var(--label)}
-ul.plain{list-style:none;margin:0;padding:0} ul.plain li{padding:8px 0;border-top:.5px solid var(--sep)} ul.plain li:first-child{border-top:0}
+details.disc .inner{padding:0 12px 12px;font-size:13.5px;color:var(--text2)}
+summary.foot-note{cursor:pointer}
+pre.report{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--text)}
+dl.rule{margin:0} dl.rule div{padding:8px 0;border-top:1px solid var(--line)} dl.rule div:first-child{border-top:0;padding-top:0}
+dl.rule dt{font-size:12px;font-weight:600;color:var(--text2)} dl.rule dd{margin:1px 0 0;color:var(--text)}
+ol.steps{margin:0;padding-left:20px} ol.steps li{margin:4px 0;color:var(--text)}
+ul.plain{list-style:none;margin:0;padding:0} ul.plain li{padding:8px 0;border-top:1px solid var(--line)} ul.plain li:first-child{border-top:0}
 
-/* side cards */
-.meter{height:7px;background:var(--fill);border-radius:4px;overflow:hidden;margin:6px 0 12px}
-.meter i{display:block;height:100%;background:var(--tint);border-radius:4px} .meter.hot i{background:var(--stop)}
-.row-kv{display:flex;justify-content:space-between;font-size:15px}
-.row-kv span{color:var(--label2)}
-.ev{padding:10px 0;font-size:14.5px}
-.ev + .ev{border-top:.5px solid var(--sep)}
-.ev time{display:block;font-size:12.5px;color:var(--label2);margin-bottom:2px}
-.ev.stop{color:var(--stop)} .ev.target{color:var(--go)} .ev.flat{color:var(--warn)}
-.watch{display:flex;justify-content:space-between;gap:10px;padding:9px 0;font-size:15px}
-.watch + .watch{border-top:.5px solid var(--sep)}
-.watch small{display:block;font-size:12.5px;color:var(--label2)}
-.empty{color:var(--label2);font-size:15px;text-align:center;padding:26px 16px}
-.empty b{display:block;color:var(--label);font-size:17px;margin-bottom:4px}
+.meter{height:6px;background:var(--raise);border-radius:3px;overflow:hidden;margin:4px 0 12px}
+.meter i{display:block;height:100%;background:var(--accent);border-radius:3px} .meter.hot i{background:var(--stop)}
+.row-kv{display:flex;justify-content:space-between;gap:12px;font-size:13.5px}
+.row-kv span{color:var(--text2)}
+.ev{padding:8px 0;font-size:13.5px}
+.ev + .ev{border-top:1px solid var(--line)}
+.ev time{display:block;font-size:11.5px;color:var(--text3);margin-bottom:1px}
+.ev.stop{color:var(--stop)} .ev.target{color:var(--go)} .ev.flat{color:var(--warn)} .ev.plan{color:var(--accent-ink)}
+.watch{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:14px}
+.watch + .watch{border-top:1px solid var(--line)}
+.watch small{display:block;font-size:12px;color:var(--text2)}
+.watch .pill{align-self:flex-start}
+.empty{color:var(--text2);font-size:14px;text-align:center;padding:24px 16px}
+.empty b{display:block;color:var(--text);font-size:15px;margin-bottom:4px}
 
-/* journal */
-.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 @media(min-width:700px){.tiles{grid-template-columns:repeat(6,1fr)}}
-.tile{background:var(--card);border-radius:16px;padding:12px 14px}
-.tile b{display:block;font:700 22px/1.15 var(--display)}
-.tile span{font-size:12.5px;color:var(--label2)}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);padding:12px 12px}
+.tile b{display:block;font:600 20px/1.15 var(--display)}
+.tile span{font-size:12px;color:var(--text2)}
 .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
-table{width:100%;border-collapse:collapse;font-size:15px}
-th,td{padding:11px 12px;text-align:right;white-space:nowrap}
-th{font-size:12.5px;color:var(--label2);font-weight:600;text-transform:none}
-tr + tr td{border-top:.5px solid var(--sep)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:8px 12px;text-align:right;white-space:nowrap}
+th{font-size:12px;color:var(--text2);font-weight:600}
+tr + tr td{border-top:1px solid var(--line)}
 th:first-child,td:first-child{text-align:left;padding-left:2px}
 
-/* forms: iOS grouped list */
-.group{background:var(--card);border-radius:var(--r-card);overflow:hidden}
-.frow{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:12px 16px}
-.frow + .frow{border-top:.5px solid var(--sep)}
+.group{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden}
+.frow{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;padding:12px 16px}
+.frow + .frow{border-top:1px solid var(--line)}
 @media(min-width:700px){.frow{grid-template-columns:minmax(0,1fr) 240px;align-items:center}}
-.frow label{font-weight:600;font-size:15.5px}
-.frow small{display:block;font-weight:400;font-size:13px;color:var(--label2);margin-top:2px}
-.frow input,.frow select,.frow textarea,.inp{width:100%;background:var(--card2);border:0;border-radius:10px;padding:10px 12px;min-height:42px;font-size:16px}
+.frow label{font-weight:600;font-size:14px}
+.frow small{display:block;font-weight:400;font-size:12.5px;color:var(--text2);margin-top:2px}
+.frow input,.frow select,.frow textarea,.inp{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 12px;min-height:38px;font-size:14px}
+.frow input:focus,.frow select:focus,.frow textarea:focus,.inp:focus{outline:none;border-color:var(--accent)}
 .frow textarea{resize:vertical}
 .frow.full{grid-template-columns:minmax(0,1fr)}
 .hrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
 .hrow .inp{width:auto;flex:1;min-width:150px;max-width:260px}
 
-/* demo warning: impossible to miss */
-.demo-banner{background:var(--warn);color:#1A1000;border-radius:14px;padding:12px 14px;margin:10px 0 12px;font-size:15px;line-height:1.35}
-.demo-banner b{font-weight:700}
-
-/* screenshot drop zone */
-.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;
-  border:1.5px dashed var(--fill);border-radius:var(--r-inner);padding:18px 14px;margin-top:12px;color:var(--label2);font-size:14.5px;cursor:pointer}
-.drop:hover,.drop.over{border-color:var(--tint);color:var(--label)}
-.drop b{color:var(--label);font-weight:600}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+  border:1.5px dashed var(--line2);border-radius:var(--r-inner);padding:20px 16px;margin-top:12px;color:var(--text2);font-size:13.5px;cursor:pointer}
+.drop:hover,.drop.over{border-color:var(--accent);color:var(--text)}
+.drop b{color:var(--text);font-weight:600}
 .drop input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.drop:focus-within{border-color:var(--tint)}
-.found{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.found button{border:0;border-radius:999px;background:var(--card2);color:var(--label);padding:7px 12px;min-height:36px;font-size:14px;cursor:pointer}
-.found button b{color:var(--tint)}
-.read-msg{font-size:14.5px;margin-top:10px}
-.big-now{font:700 30px/1.1 var(--display)}
+.drop:focus-within{border-color:var(--accent)}
+.found{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.found button{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--text);padding:8px 12px;min-height:34px;font-size:13px;cursor:pointer}
+.found button b{color:var(--accent-ink)}
+.read-msg{font-size:13.5px;margin-top:12px}
+.big-now{font:600 26px/1.1 var(--display)}
 
-/* iOS switch */
-.switch{position:relative;width:51px;height:31px;border-radius:999px;border:0;background:var(--fill);cursor:pointer;flex:none;padding:0}
-.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.3)}
-.switch[aria-checked=true]{background:var(--go)}
-.switch[aria-checked=true]::after{left:22px}
-@media (prefers-reduced-motion:no-preference){.switch::after{transition:left .18s ease}.switch{transition:background-color .18s ease}}
-.callout.money{background:var(--stopBg);color:var(--label);font-weight:600}
-.swrow{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:4px 0}
-.swrow b{display:block;font-weight:600}
-.swrow small{display:block;font-size:13px;color:var(--label2)}
-.steps-plain{margin:6px 0 12px;padding-left:20px;font-size:14.5px;color:var(--label2)} .steps-plain li{margin:5px 0}
-.stack{display:grid;gap:8px;margin-top:10px}
+.switch{position:relative;width:44px;height:26px;border-radius:13px;border:0;background:var(--raise);cursor:pointer;flex:none;padding:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--text);box-shadow:0 1px 3px var(--shadow-sm)}
+.switch[aria-checked=true]{background:var(--accent)}
+.switch[aria-checked=true]::after{transform:translateX(18px)}
+.switch:disabled{background:var(--panel2);cursor:not-allowed}.switch:disabled::after{background:var(--text3)}
+.callout.money{background:var(--stopBg);color:var(--text);font-weight:600}
+.swrow{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:4px 0}
+.swrow + .swrow{border-top:1px solid var(--line);padding-top:12px;margin-top:8px}
+.swrow b{display:block;font-weight:600;font-size:14px}
+.swrow small{display:block;font-size:12.5px;color:var(--text2)}
+.steps-plain{margin:8px 0 12px;padding-left:20px;font-size:13.5px;color:var(--text2)} .steps-plain li{margin:4px 0}
+.stack{display:grid;gap:8px;margin-top:12px}
 
-/* toast */
-#toast{position:fixed;left:50%;top:max(14px,env(safe-area-inset-top));transform:translateX(-50%);z-index:30;
-  background:var(--card2);color:var(--label);padding:11px 18px;border-radius:999px;font-size:15px;font-weight:500;
-  box-shadow:0 10px 30px rgba(0,0,0,.5);max-width:92vw;display:none}
-#toast.err{background:#3A1412;color:#FFB4AE}
+#toast{position:fixed;left:50%;top:62px;transform:translateX(-50%);z-index:50;
+  background:var(--raise);color:var(--text);padding:12px 16px;border-radius:var(--r);font-size:14px;font-weight:550;
+  box-shadow:0 12px 32px var(--shadow-md);max-width:92vw;display:none;border:1px solid var(--line2)}
+#toast.err{background:var(--err-bg);color:var(--err-ink)}
+footer{max-width:1180px;margin:0 auto;padding:4px 20px 32px;color:var(--text3);font-size:12px;line-height:1.45}
 
-footer{max-width:1180px;margin:0 auto;padding:4px 18px 110px;color:var(--label2);font-size:12.5px;line-height:1.45}
-@media(min-width:900px){footer{padding-bottom:30px}}
-@media (prefers-reduced-motion:no-preference){.seg button,.tabs button,.btn{transition:background-color .15s ease,color .15s ease}}
+/* motion: one moment. When a stock is picked, the chart and its plan settle in; nothing loops. */
+@media (prefers-reduced-motion:no-preference){
+  .seg button,.tabs button,.btn,.wl-row,.ivl button{transition:background-color .15s var(--ease),color .15s var(--ease)}
+  .switch::after{transition:transform .2s var(--ease)}.switch{transition:background-color .2s var(--ease)}
+  .settle{animation:settle .45s var(--ease) both}
+  .settle-2{animation:settle .45s .06s var(--ease) both}
+  @keyframes settle{from{opacity:0;transform:translateY(6px);filter:blur(3px)}to{opacity:1;transform:none;filter:none}}
+}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <div class="wrap">
   <header class="top">
-    <span class="greet" id="greet">Trading Desk</span>
-    <span class="mode-badge" id="mode-badge" hidden></span>
-    <span class="mark" id="mark" aria-hidden="true"></span>
+    <div class="brand"><span class="mark" id="mark" aria-hidden="true"></span><span class="brand-name">Trading Desk</span><span class="greet" id="greet"></span></div>
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button role="tab" data-v="desk" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 4v16M6 8h-1.5v7H6M12 3v18M12 6h-1.5v9H12M18 6v13M18 9h-1.5v6H18"/></svg>Desk</button>
+      <button role="tab" data-v="account" aria-selected="false" id="tab-account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M3.5 9.5h17M7 15h4"/></svg>Account</button>
+      <button role="tab" data-v="journal" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Journal</button>
+      <button role="tab" data-v="research" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>Research</button>
+      <button role="tab" data-v="catalysts" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6z"/></svg>Catalysts</button>
+      <button role="tab" data-v="graph" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5h16"/><path d="m4.5 15 4.5-5 4 3.5 6.5-8"/></svg>Graph</button>
+      <button role="tab" data-v="settings" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>Settings</button>
+    </nav>
+    <div class="top-right">
+      <span class="clock num" id="clock"></span>
+      <span class="equity num" id="top-equity"></span>
+      <span class="mode-badge" id="mode-badge" hidden></span>
+    </div>
   </header>
   <div class="demo-banner" id="demo-banner" role="alert" hidden><b>Demo: not today's market.</b> Saved data from Monday, October 19, 2026, with the clock stuck at 10:15. Do not place real orders from it. Start the Trading Desk app (or <span class="num">python3 -m desk</span>) for today's signals.</div>
-  <h1 class="large" id="title">Desk</h1>
-  <p class="clock num" id="clock"></p>
-
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <button role="tab" data-v="desk" aria-selected="true"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 19h16v1.6H4zM5 11h3v7H5zm5.5-5h3v12h-3zM16 8h3v10h-3z"/></svg>Desk</button>
-    <button role="tab" data-v="account" aria-selected="false" id="tab-account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M3.5 9.5h17M7 15h4"/></svg>Account</button>
-    <button role="tab" data-v="journal" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="4.5" y="3.5" width="15" height="17" rx="2.5"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Journal</button>
-    <button role="tab" data-v="research" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg>Research</button>
-    <button role="tab" data-v="settings" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>Settings</button>
-  </nav>
 
   <main id="main">
+    <h1 class="vh" id="title">Desk</h1>
     <section class="view on" id="v-desk" aria-label="Desk">
-      <div class="grid">
-        <div>
-          <div class="card hero">
-            <div class="cap"><span id="acct-cap">Account</span><span class="chip" id="mode-chip"><i></i><span id="mode-text">Today's market</span></span></div>
-            <div class="big num" id="f-equity">–</div>
-            <div class="three num">
-              <div><b id="f-spend">–</b><span>Can spend</span></div>
-              <div><b id="f-risk">–</b><span>Max loss a trade</span></div>
-              <div><b id="f-day">–</b><span>Today</span></div>
+      <div class="ws">
+        <aside class="pane watchpane" aria-label="Today's list">
+          <div class="pane-head"><h2>Today's list</h2><small id="wl-meta"></small></div>
+          <div class="wl-tools"><label class="vh" for="wl-find">Find a stock</label><input id="wl-find" placeholder="Find or chart any ticker" autocomplete="off" spellcheck="false"></div>
+          <div class="wl-cols" aria-hidden="true"><span>Stock</span><span>Range</span><span>Plan</span></div>
+          <div id="scanlist" role="list"></div>
+        </aside>
+
+        <section class="pane center" aria-label="Chart">
+          <div class="ch-bar">
+            <span class="ch-sym" id="ch-sym">–</span>
+            <span class="ch-last num" id="ch-last"></span>
+            <span class="ch-sub num" id="ch-sub"></span>
+            <span class="grow"></span>
+            <div class="ivl" role="group" aria-label="Candle size">
+              <button data-ivl="1m" aria-pressed="false">1m</button><button data-ivl="5m" aria-pressed="true">5m</button><button data-ivl="1d" aria-pressed="false">1D</button>
             </div>
+            <a class="btn small gray" id="ch-tv" target="_blank" rel="noopener noreferrer" hidden>TradingView<span class="vh">, opens in a new window</span>&nbsp;↗</a>
           </div>
-          <div id="shorts-note"></div>
-          <div class="card status" id="status"></div>
-          <div class="card" id="auto-card" style="margin-top:12px"></div>
-          <div id="health-warn"></div>
-          <div class="seg" role="group" aria-label="Show">
-            <button data-f="ready" aria-pressed="true">Ready</button>
-            <button data-f="all" aria-pressed="false">All</button>
-            <button data-f="open" aria-pressed="false">Open</button>
+          <div class="ch-wrap"><div id="chart" role="img" aria-label="Candle chart"></div><div class="ch-msg" id="ch-msg" hidden></div></div>
+          <div class="legend num" id="legend"></div>
+          <div class="thesis" id="thesis" aria-live="polite"></div>
+        </section>
+
+        <aside class="pane right" aria-label="Plan and signals">
+          <div class="acct num">
+            <div><b id="f-equity">–</b><span id="acct-cap">Account</span></div>
+            <div><b id="f-spend">–</b><span>Can spend</span></div>
+            <div><b id="f-risk">–</b><span>Risk a trade</span></div>
+            <div><b id="f-day">–</b><span>Today</span></div>
           </div>
-          <div id="open"></div>
-          <div id="signals"></div>
-        </div>
-        <aside>
+          <div class="pane-body">
+            <span class="chip" id="mode-chip" hidden><i></i><span id="mode-text"></span></span>
+            <div id="shorts-note"></div>
+            <div class="card status" id="status"></div>
+            <div id="health-warn"></div>
+            <div class="card" id="plan"></div>
+            <div class="seg" role="group" aria-label="Show">
+              <button data-f="ready" aria-pressed="true">Ready</button>
+              <button data-f="all" aria-pressed="false">All</button>
+              <button data-f="open" aria-pressed="false">Open</button>
+            </div>
+            <div id="open"></div>
+            <div id="signals"></div>
+            <div class="card" id="auto-card"></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="below">
+        <div>
           <h2 class="section-title">Today's limits</h2>
           <div class="card" id="limits"></div>
+          <h2 class="section-title">Daily-chart setups</h2>
+          <div class="card" id="premarket"></div>
+        </div>
+        <div>
           <h2 class="section-title">What happened</h2>
           <div class="card" id="events"></div>
-          <h2 class="section-title">Charts to watch</h2>
-          <div class="card" id="premarket"></div>
+        </div>
+        <div>
           <h2 class="section-title">Export watchlist</h2>
           <div class="card" id="export">
             <p class="foot-note" style="margin:0 0 10px">Today's signals, open trades and your watchlist as a list for thinkorswim or TradingView. The desk sends nothing anywhere: you paste or upload the list yourself.</p>
@@ -324,7 +445,7 @@ footer{max-width:1180px;margin:0 auto;padding:4px 18px 110px;color:var(--label2)
               <p style="margin:8px 0 0">TradingView and thinkorswim Web were checked on 2026-11-10. The thinkorswim desktop steps come from its help pages.</p>
             </div></details>
           </div>
-        </aside>
+        </div>
       </div>
     </section>
 
@@ -369,6 +490,25 @@ footer{max-width:1180px;margin:0 auto;padding:4px 18px 110px;color:var(--label2)
       </div>
     </section>
 
+    <section class="view" id="v-catalysts" aria-label="Catalysts">
+      <p class="foot-note" style="margin:0 2px 12px">Public news and events that move stocks, scored 0 to 100 for how fresh, how big and how confirmed they are, and how lively the chart is. Sources: Yahoo's trending list and screeners, Nasdaq's IPO and earnings calendars, the News skill (and SEC filings with an SEC contact), and your own lines in Settings. The best tradeable ones get places on today's scan list. A catalyst is a reason to look, not a signal: a trade still needs its breakout. Headlines are leads, not facts; open the source first. Not advice.</p>
+      <div class="hrow"><button class="btn small gray" id="cat-go">Look again now</button><span class="foot-note" id="cat-at"></span></div>
+      <h2 class="section-title">Today's movers and news</h2>
+      <div class="card" id="cat-today"></div>
+      <h2 class="section-title">Coming up</h2>
+      <div class="card" id="cat-soon"></div>
+      <div id="cat-notes"></div>
+    </section>
+
+    <section class="view" id="v-graph" aria-label="Graph">
+      <h2 class="section-title">Made or lost, this account</h2>
+      <div class="card" id="g-me"></div>
+      <h2 class="section-title">Every paper account</h2>
+      <div class="card" id="g-all"></div>
+      <h2 class="section-title">By day</h2>
+      <div class="card" id="g-days"></div>
+      <p class="foot-note">Closed trades only, practice money unless the badge says LIVE. Add an account: <code>python3 -m desk --account growth --tickers "TSLA NVDA AMD"</code></p>
+    </section>
     <section class="view" id="v-settings" aria-label="Settings">
       <h2 class="section-title">Health</h2>
       <div class="card" id="health"></div>
@@ -390,6 +530,7 @@ footer{max-width:1180px;margin:0 auto;padding:4px 18px 110px;color:var(--label2)
 </div>
 <footer>This desk reads free, delayed public data and does arithmetic. It never places a real order: you place each one at your broker yourself. It is for education and is not financial advice. Most day traders lose money. A stop is a plan: in a fast market it can fill worse than its price. Check every number against your broker before you send an order.</footer>
 <div id="toast" role="status" aria-live="polite"></div>
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
 <script>
 "use strict";
 const $ = (s, r=document) => r.querySelector(s);
@@ -400,19 +541,53 @@ const pct = p => Math.round(p * 1000) / 10 + "%";
 const mins = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
 const t12 = t => { if (!t) return ""; const [h, m] = t.split(":").map(Number); return ((h + 11) % 12 + 1) + ":" + String(m).padStart(2, "0") + (h < 12 ? " AM" : " PM"); };
 let S = null, drafts = {}, formDirty = false, FILTER = "ready";
-const TITLES = {desk:"Desk", account:"Account", journal:"Journal", research:"Research", settings:"Settings"};
+const TITLES = {desk:"Desk", account:"Account", journal:"Journal", research:"Research", catalysts:"Catalysts", graph:"Graph", settings:"Settings"};
 
 // The mark: 12 overlapping circles in a ring.
 (function () {
   const p = [];
   for (let i = 0; i < 12; i++) {
     const a = i / 12 * Math.PI * 2;
-    p.push(`<circle cx="${(12 + 4.6 * Math.cos(a)).toFixed(2)}" cy="${(11.5 + 4.6 * Math.sin(a)).toFixed(2)}" r="4.4" fill="none" stroke="#0A84FF" stroke-width=".7" opacity=".85"/>`);
+    p.push(`<circle cx="${(12 + 4.6 * Math.cos(a)).toFixed(2)}" cy="${(11.5 + 4.6 * Math.sin(a)).toFixed(2)}" r="4.4" fill="none" stroke="#7C9BFF" stroke-width=".7" opacity=".9"/>`);
   }
   $("#mark").innerHTML = `<svg viewBox="0 0 24 24">${p.join("")}</svg>`;
 })();
 
 function toast(msg, err) { const t = $("#toast"); t.textContent = msg; t.className = err ? "err" : ""; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", err ? 7000 : 3500); }
+// ---- Graph tab: running made-or-lost lines, inline SVG
+const GCOL = ["#0A84FF", "#30D158", "#FFB340", "#DA8FFF", "#64D2FF", "#FF6961"];
+const tms = at => Date.parse(String(at).replace(" ", "T")) || 0;
+function lineChart(series, label) {
+  const all = series.flatMap(x => x.pts);
+  if (!all.length) return `<p class="empty" style="padding:8px">No closed trades yet. The line starts with the first one.</p>`;
+  const W = 640, H = 220, L = 58, R = 10, T = 12, B = 26;
+  const xs = all.map(p => p.t), ys = all.map(p => p.y).concat([0]);
+  let x0 = Math.min(...xs), x1 = Math.max(...xs); if (x1 === x0) { x0 -= 3.6e6; x1 += 3.6e6; }
+  let y0 = Math.min(...ys), y1 = Math.max(...ys); if (y1 === y0) { y0 -= 1; y1 += 1; }
+  const pad = (y1 - y0) * .08; y0 -= pad; y1 += pad;
+  const X = t => L + (t - x0) / (x1 - x0) * (W - L - R), Y = v => T + (y1 - v) / (y1 - y0) * (H - T - B);
+  const ticks = [y0 + pad, (y0 + y1) / 2, y1 - pad].map(v => `<text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" style="fill:var(--label2)">${esc(usd(Math.round(v * 100) / 100, true))}</text>`).join("");
+  const day = t => new Date(t).toLocaleDateString("en-US", {month: "short", day: "numeric"});
+  const lines = series.map(x => x.pts.length ? `<polyline fill="none" stroke="${x.color}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="${[{t: x.pts[0].t, y: 0}].concat(x.pts).map(p => X(p.t).toFixed(1) + "," + Y(p.y).toFixed(1)).join(" ")}"/>` +
+      `<circle cx="${X(x.pts.at(-1).t).toFixed(1)}" cy="${Y(x.pts.at(-1).y).toFixed(1)}" r="3.5" fill="${x.color}"/>` : "").join("");
+  const key = series.map(x => `<span style="display:inline-flex;align-items:center;gap:6px;margin-right:14px"><i style="width:10px;height:10px;border-radius:3px;background:${x.color}"></i>${esc(x.name)} <b class="num">${usd(x.pts.length ? x.pts.at(-1).y : 0, true)}</b></span>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}" style="width:100%;height:auto;display:block">
+      <line x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}" style="stroke:var(--sep)" stroke-dasharray="3 4"/>${ticks}
+      <text x="${L}" y="${H - 6}" font-size="11" style="fill:var(--label2)">${day(x0)}</text><text x="${W - R}" y="${H - 6}" text-anchor="end" font-size="11" style="fill:var(--label2)">${day(x1)}</text>
+      ${lines}</svg><div class="foot-note" style="margin:10px 0 0">${key}</div>`;
+}
+async function loadGraph() {
+  let g; try { g = await api("/api/graph"); } catch (e) { return toast(e.message, true); }
+  const me = g.accounts.find(a => a.current) || g.accounts[0];
+  const pts = k => me.points.map(p => ({t: tms(p.at), y: p[k]}));
+  $("#g-me").innerHTML = lineChart([{name: "Bot (auto paper)", color: "#0A84FF", pts: pts("bot")}, {name: "You", color: "#30D158", pts: pts("you")},
+      {name: "Total", color: "#AEAEB2", pts: pts("total")}], "Made or lost over time, this account") +
+    `<p class="foot-note" style="margin:6px 0 0">${me.trades} closed trades, ${me.wins} winners${me.trades ? " (" + Math.round(me.wins / me.trades * 100) + "%)" : ""}${me.live ? " · LIVE record" : ""}.</p>`;
+  $("#g-all").innerHTML = lineChart(g.accounts.map((a, i) => ({name: a.name + (a.current ? " (this one)" : ""), color: GCOL[i % GCOL.length],
+      pts: a.points.map(p => ({t: tms(p.at), y: p.total}))})), "Made or lost over time, every paper account");
+  const days = me.days.slice(-20).reverse();
+  $("#g-days").innerHTML = days.length ? days.map(d => `<div class="row-kv num"><span>${esc(d.date)} · ${d.trades} trade${d.trades === 1 ? "" : "s"}</span><b style="color:${d.pnl < 0 ? "var(--stop)" : "var(--go)"}">${usd(d.pnl, true)}</b></div>`).join("") : `<p class="empty" style="padding:8px">No closed trades yet.</p>`;
+}
 async function api(path, body) {
   const r = await fetch(path, body ? {method:"POST", headers:{"Content-Type":"application/json", "X-Desk":"1"}, body:JSON.stringify(body)} : {});
   const d = await r.json().catch(() => ({error:"The desk did not answer."}));
@@ -463,13 +638,14 @@ function slip(s, now) {
   const left = p.valid_until ? mins(p.valid_until) - mins(now.slice(11)) : null;
   const dim = s.off || ["blocked","missed","expired","skipped"].includes(s.status) ? " dim" : "";
   const head = `<div class="chead"><div class="logo" aria-hidden="true">${initials(p.symbol)}</div>
-      <div style="min-width:0"><div class="ticker">${esc(p.symbol)}${sideTags(sh, p.paper_only)}</div><div class="sub num">Broke ${sh ? "down" : "out"} ${esc(p.trigger_time)} at ${px(p.trigger_price)}</div></div>
+      <div style="min-width:0"><div class="ticker"><button data-sel="${esc(p.symbol)}" title="Show on the chart">${esc(p.symbol)}</button>${sideTags(sh, p.paper_only)}</div><div class="sub num">Broke ${sh ? "down" : "out"} ${esc(p.trigger_time)} at ${px(p.trigger_price)}</div></div>
       <span class="${cls}">${label}</span></div>`;
   const probs = (s.off ? `<div class="callout bad">${esc(s.off)}</div>` : "") + (p.problems || []).map(x => `<div class="callout bad">${esc(x)}</div>`).join("") + (p.warnings || []).map(x => `<div class="callout">${esc(x)}</div>`).join("");
   if (p.qty == null || !p.qty) return `<article class="card sig ${esc(s.status)}${dim}">${head}${probs}${chartLink(p.symbol)}${ruleCard(p)}</article>`;
   const d = drafts[s.id] || {qty:p.qty, price:""};
   const news = (p.news || []).map(n => `<li>${n.link ? `<a href="${esc(n.link)}" target="_blank" rel="noopener noreferrer">${esc(n.title)}</a>` : esc(n.title)}${(n.tags || []).length ? ` <span class="num">· ${esc(n.tags.join(", "))}</span>` : ""}</li>`).join("");
   const timer = live && left != null ? `<div class="timer num ${left <= 3 ? "soon" : ""}">${ring(left, S.settings.signal_valid_minutes)}Good until ${esc(t12(p.valid_until))} · ${Math.max(0, left)} min left</div>` : "";
+  const pl = p.plan ? `<p class="planline">${biasTag(p.plan)}<span>${p.plan.agrees ? "Agrees with Claude's plan" : "Claude's plan says " + esc(p.plan.bias)}: ${esc(p.plan.thesis)}</span></p>` : "";
   return `<article class="card sig ${esc(s.off ? "off" : s.status)}${dim}">${head}
     <div class="order num">${sh ? "Sell short" : "Buy"} ${p.qty} at <em>${px(p.limit)}</em> or ${sh ? "higher" : "lower"}</div>
     <div class="list num">
@@ -484,7 +660,7 @@ function slip(s, now) {
     <div class="pl num"><div class="l"><small>If the stop fills${sh ? " at its price" : ""}</small><b class="neg">${usd(-p.max_loss)}</b></div><div class="w"><small>If the target fills</small><b class="pos">${usd(p.reward, true)}</b></div></div>
     ${sh ? `<div class="callout bad">A short's loss is not capped. If the price gaps over the stop you lose more than ${usd(p.max_loss)}.</div>` : ""}
     ${sh && p.paper_only ? `<div class="callout"><b>Practice only: this account cannot short for real.</b> ${S.demo ? "This is demo data: do not place it anywhere." : "Practise it in your broker's paper account with the desk in paper mode, never in your real account."} ${(p.paper_why || []).map(esc).join(" ")}</div>` : ""}
-    ${probs}${odds(p.odds)}
+    ${pl}${probs}${odds(p.odds)}
     <p class="foot-note" style="margin:10px 0 0">Sized by your ${esc(p.bound_by || "limits")}. If the price is ${sh ? "below" : "above"} ${px(p.limit)}, skip it.</p>
     ${chartLink(p.symbol)}
     ${timer}
@@ -501,7 +677,7 @@ function slip(s, now) {
 function openTrade(t) {
   const d = drafts["x" + t.id] || {price:"", reason:"target"}, sh = t.side === "short";
   return `<article class="card sig open"><div class="chead"><div class="logo" aria-hidden="true">${initials(t.symbol)}</div>
-      <div style="min-width:0"><div class="ticker">${esc(t.symbol)}${sideTags(sh, practiceTrade(t))}</div><div class="sub num">${t.qty} shares ${sh ? "sold short " : ""}at ${px(t.entry_price)}</div></div><span class="pill open">Open</span></div>
+      <div style="min-width:0"><div class="ticker"><button data-sel="${esc(t.symbol)}" title="Show on the chart">${esc(t.symbol)}</button>${sideTags(sh, practiceTrade(t))}</div><div class="sub num">${t.qty} shares ${sh ? "sold short " : ""}at ${px(t.entry_price)}</div></div><span class="pill open">Open</span></div>
     <div class="order num">${t.last ? `Last ${px(t.last)} <span class="${t.unrealised >= 0 ? "pos" : "neg"}">${usd(t.unrealised, true)}</span> <span class="sub" style="display:inline">delayed</span>` : `<span class="sub" style="display:inline;font-size:16px">Waiting for a quote</span>`}</div>
     <div class="list num">
       <div class="li"><span><i class="dot" style="background:var(--go)"></i>Target</span><b>${px(t.target)} <span class="pos">${usd(t.reward, true)}</span></b></div>
@@ -526,18 +702,19 @@ function render() {
   const live = s.mode === "live";
   document.title = (s.demo ? "DEMO · " : "") + (live ? "LIVE · " : "Paper · ") + "Trading Desk";
   const mb = $("#mode-badge"); mb.hidden = false; mb.className = "mode-badge" + (live ? " live" : "");
-  mb.textContent = live ? "LIVE · real money" : "PAPER · practice";
-  $("#acct-cap").textContent = live ? "Live account" : "Paper account";
-  $("#clock").textContent = t12(now.slice(11)) + " New York · " + (s.clock.open ? "market open" : "market closed");
+  mb.textContent = (live ? "LIVE · real money" : "PAPER · practice") + (s.account_name ? " · " + s.account_name : "");
+  $("#acct-cap").textContent = live ? "Live" : "Paper";
+  $("#clock").innerHTML = `<b>${esc(t12(now.slice(11)))}</b> <span class="wordy">New York · ${s.clock.open ? "market open" : "market closed"}</span>`;
+  $("#top-equity").textContent = usd(a.equity);
   $("#mode-chip").className = "chip" + (s.demo ? "" : " live");
   $("#mode-text").textContent = s.demo ? "Demo · " + now.slice(5, 10).replace("-", "/") : "Today's market";
   $("#f-equity").textContent = usd(a.equity); $("#f-spend").textContent = usd(a.spendable);
   $("#f-risk").textContent = usd(L.max_loss_per_trade);
   $("#f-day").textContent = usd(s.day.realised, true); $("#f-day").className = s.day.realised < 0 ? "neg" : s.day.realised > 0 ? "pos" : "";
   const so = s.shorts || {};
-  $("#shorts-note").innerHTML = so.on ? `<div class="card" style="margin:0 0 12px"><div class="cap"><span>Short signals are on${so.long_on ? "" : " (longs are off)"}</span>${so.paper_only ? `<span class="side-tag paper">PRACTICE ONLY</span>` : ""}</div>
-      ${so.paper_only ? `<div class="callout">Short signals are practice only: this account cannot short for real${S.demo ? " (and this is the demo: place nothing from it)" : ""}. In live mode they are shown but cannot be recorded. ${so.why.map(esc).join(" ")}</div>` : `<div class="callout bad">Your settings say this account can short. The desk cannot check that with your broker.</div>`}
-      <details class="disc"><summary>Short-selling rules and risks</summary><div class="inner">${factsList()}</div></details></div>` : "";
+  $("#shorts-note").innerHTML = so.on ? `<details class="disc" style="margin:0 0 10px"><summary><span>Short signals on${so.long_on ? "" : " (longs off)"}${so.paper_only ? ` <span class="side-tag paper">PRACTICE ONLY</span>` : ""}</span></summary><div class="inner">
+      ${so.paper_only ? `<p style="margin:0 0 6px">This account cannot short for real${S.demo ? " (and this is the demo: place nothing from it)" : ""}. In live mode short signals are shown but cannot be recorded. ${so.why.map(esc).join(" ")}</p>` : `<p style="margin:0 0 6px;color:var(--stop)">Your settings say this account can short. The desk cannot check that with your broker.</p>`}
+      ${factsList()}</div></details>` : "";
   const ls = s.last_scan, st = $("#status");
   st.className = "card status" + (s.halt ? " halt" : "");
   st.innerHTML = `<div class="grow">${s.halt ? `<b>${esc(s.halt)}</b>` : `<b>Looking for setups.</b> `}
@@ -573,6 +750,12 @@ function render() {
     <div class="row-kv num"><span>Settled cash</span><b>${usd(a.settled_cash)}</b></div>
     ${a.unsettled.map(u => `<p class="foot-note num" style="margin:6px 0 0">${usd(u.amount)} settles ${esc(u.settles_on)}</p>`).join("")}`;
   $("#events").innerHTML = s.events.length ? s.events.slice(0, 12).map(e => `<div class="ev ${esc(e.kind)}"><time class="num">${esc(e.ts.slice(5))}</time>${esc(e.message)}</div>`).join("") : `<p class="empty" style="padding:8px">Signals, fills and alerts show up here.</p>`;
+  SEL = pickDefault(s);
+  renderScanList(s);
+  renderPlan(s);
+  renderThesis();
+  loadChart(false);
+  renderCatalysts(s);
   const pm = s.premarket;
   $("#premarket").innerHTML = pm && pm.hits && pm.hits.length ? pm.hits.slice(0, 10).map(h => `<div class="watch"><div><b>${S.chart_urls && S.chart_urls[h.symbol] ? `<a href="${esc(S.chart_urls[h.symbol])}" target="_blank" rel="noopener noreferrer" style="color:inherit">${esc(h.symbol)}<span class="vh"> chart in TradingView, opens in a new window</span></a>` : esc(h.symbol)}</b><small>${esc((h.setups || []).join(", ").replace(/_/g, " "))}</small></div><b class="num">${px(h.price)}</b></div>`).join("") + `<p class="foot-note" style="margin:8px 0 0">Daily-chart setups as of ${esc(pm.as_of)}. A list to watch, not to buy.</p>` : `<p class="empty" style="padding:8px">${pm && pm.error ? esc(pm.error) : "The pre-market scan runs once each morning."}</p>`;
   const unk = s.export_unknown || [];
@@ -591,6 +774,142 @@ function render() {
 // ---- Results: fetched when the Journal tab is open (it reads the whole record)
 let RV = null;
 async function loadReview() { try { RV = await api("/api/review"); renderReview(); } catch (e) { $("#review").innerHTML = `<div class="callout bad">${esc(e.message)}</div>`; } }
+// ---- Catalysts tab (desk/catalysts.py): read from the state; links are https only, checked by the desk
+function catRow(r) {
+  const a = (u, t) => u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>` : esc(t);
+  const chip = r.on_list ? `<span class="pill go">On today's list</span>`
+    : r.tradeable ? `<span class="pill">Not on the list</span>`
+    : `<span class="pill weak">${r.eligible_on ? "Watch · from " + esc(r.eligible_on) : "Watch only"}</span>`;
+  const news = (r.headlines || []).slice(0, 2).map(h => `<small>${a(h.link, h.title)} (${esc(h.source)})</small>`).join("");
+  return `<div class="watch"><div><b>${esc(r.symbol)}</b> <span class="num" title="Score out of 100">${r.score}</span><small>${esc(r.reason)}</small>${news}<small>${esc(r.status)} · ${a(r.link, r.source || "source")}</small></div>${chip}</div>`;
+}
+function renderCatalysts(s) {
+  const c = s.catalysts || {}, today = s.now.slice(0, 10), items = c.date === today ? (c.items || []) : [];
+  const why = s.demo ? "The demo has no live news. Run the desk without --demo to track catalysts."
+    : !c.on ? "Catalyst tracking is off (Settings, Track catalysts)."
+    : c.looking ? "Looking now. This takes about a minute."
+    : "The desk looks at 8:00 AM New York, then each hour until 4 PM. Press Look again now to look sooner.";
+  const list = (rows, none) => rows.length ? rows.slice(0, 12).map(catRow).join("")
+    + (rows.length > 12 ? `<details><summary class="foot-note">${rows.length - 12} more</summary>${rows.slice(12).map(catRow).join("")}</details>` : "")
+    : `<p class="empty" style="padding:8px">${esc(items.length ? none : why)}</p>`;
+  $("#cat-today").innerHTML = list(items.filter(r => !r.when || r.when <= today), "Nothing new today yet.");
+  $("#cat-soon").innerHTML = list(items.filter(r => r.when && r.when > today).sort((x, y) => x.when < y.when ? -1 : x.when > y.when ? 1 : y.score - x.score), "No IPOs, earnings or events of yours in the next few days.");
+  $("#cat-at").textContent = c.looking ? "Looking now…" : c.date === today ? "Checked at " + t12(c.at.slice(11)) + " New York" : "";
+  $("#cat-go").disabled = !!(s.demo || c.looking);
+  const errs = c.date === today ? (c.errors || []) : [];
+  $("#cat-notes").innerHTML = errs.length ? `<details><summary class="foot-note">${errs.length} source${errs.length === 1 ? "" : "s"} did not answer</summary>${errs.map(e => `<p class="foot-note" style="margin:4px 0 0">${esc(e)}</p>`).join("")}</details>` : "";
+}
+// ---- the workspace: today's list with Claude's bias, the chart, the plan (desk/analyst.py)
+let SEL = null, IVL = "5m", CH = null, CHKEY = "", CHAT = 0;
+const planFor = sym => { const g = S && S.game_plan; return g && g.date === S.now.slice(0, 10) && g.focus ? g.focus[sym] : null; };
+const BIAS = {long: "Long", short: "Short", avoid: "Avoid"};
+function biasTag(p) { return p ? `<span class="bias ${esc(p.bias)}" title="Claude's plan, conviction ${p.conviction} of 5">${BIAS[p.bias]} ${p.conviction}</span>` : `<span class="bias none">–</span>`; }
+function listRows(s) {
+  const sl = s.scan_list || {};
+  if (sl.using === "picked") return sl.today.symbols;
+  return (s.settings.watchlist || []).map(x => ({symbol: x, why: "On your watchlist", atr_pct: null}));
+}
+function renderScanList(s) {
+  const sl = s.scan_list || {}, t = sl.today, rows = listRows(s), q = ($("#wl-find").value || "").trim().toUpperCase();
+  const src = r => (r.from || []).some(f => String(f).startsWith("claude")) ? `<span class="src" title="Added by Claude during the day">+C</span>`
+    : (r.from || []).includes("catalyst") ? `<span class="src" title="On the list for a catalyst">news</span>` : "";
+  const shown = rows.filter(r => !q || r.symbol.includes(q));
+  $("#scanlist").innerHTML = shown.map(r => { const p = planFor(r.symbol);
+    return `<button class="wl-row ${p ? esc(p.bias) : ""}" role="listitem" data-sel="${esc(r.symbol)}" aria-current="${r.symbol === SEL}">
+      <span><span class="wl-sym">${esc(r.symbol)}</span>${src(r)}<span class="wl-why">${esc(p ? p.thesis : r.why)}</span></span>
+      <span class="wl-atr num">${r.atr_pct == null ? "–" : esc(r.atr_pct) + "%"}</span>${biasTag(p)}</button>`; }).join("")
+    || `<p class="empty">${q ? `Not on today's list. Press Enter to chart ${esc(q)}.` : sl.using !== "picked" && s.demo ? "The demo has no daily bars, so it scans your watchlist." : "No stocks yet."}</p>`;
+  $("#wl-meta").textContent = sl.using === "picked" ? `${rows.length} · ${t.by === "claude" ? "Claude" : "formula"} ${t.at.slice(11)}` : `${rows.length} · your watchlist`;
+}
+function renderPlan(s) {
+  const g = s.game_plan || {}, today = s.now.slice(0, 10), box = $("#plan");
+  const btn = `<button class="btn small gray" id="plan-go" ${s.demo || g.looking ? "disabled" : ""}>${g.looking ? "Claude is looking…" : "Look again now"}</button>`;
+  if (g.date !== today || !g.focus || !Object.keys(g.focus).length) {
+    const why = s.demo ? "The demo has no live market, so Claude does not plan it."
+      : !g.on ? "Claude's game plan is off (Settings, Research analyst)."
+      : g.date === today && g.error ? "Claude could not plan today: " + g.error
+      : "Claude studies today's list after the 8:00 pick and writes a plan: a bias for each stock, then a look each hour.";
+    box.innerHTML = `<div class="cap"><span>Claude's game plan</span>${btn}</div><p class="plan-sum" style="margin:8px 0 0">${esc(why)}</p>`;
+    return;
+  }
+  const f = Object.values(g.focus), n = b => f.filter(x => x.bias === b).length, ds = g.day_settings || (g.morning || {}).day_settings;
+  box.innerHTML = `<div class="cap"><span>Claude's game plan · ${esc(g.kind === "morning" ? "morning" : "updated")} ${esc(t12(g.at.slice(11)))}</span>${btn}</div>
+    <div class="plan-mood" style="margin-top:8px"><span class="mood ${esc(g.market.mood)}">${esc(g.market.mood[0].toUpperCase() + g.market.mood.slice(1).replace("-", " "))}</span></div>
+    <p class="plan-sum">${esc(g.market.summary)}</p>
+    <div class="plan-split num"><div><b class="pos">${n("long")}</b><small>Long</small></div><div><b class="neg">${n("short")}</b><small>Short</small></div><div><b>${n("avoid")}</b><small>Avoid</small></div></div>
+    ${(g.adds || []).length ? `<p class="plan-sum">Added this hour: <b>${g.adds.map(esc).join(", ")}</b></p>` : ""}
+    ${(g.changes || []).length ? `<p class="plan-sum">Changed bias: <b>${g.changes.map(esc).join(", ")}</b></p>` : ""}
+    ${(g.watch_for || []).length ? `<details class="disc"><summary>What to watch for today</summary><div class="inner"><ul class="watchfor">${g.watch_for.map(w => `<li>${esc(w)}</li>`).join("")}</ul></div></details>` : ""}
+    ${ds && ds.set && Object.keys(ds.set).length ? `<p class="dayset">Set for today: ${Object.entries(ds.set).map(([k, v]) => k === "watchlist" ? `<b>${v.length} stocks</b> on the watchlist` : k === "risk_per_trade_pct" ? `risk a trade <b>${esc(v)}%</b> (yours ${esc(ds.base[k])}%)` : k === "no_entries_after" ? `last entry <b>${esc(t12(v))}</b>` : k === "directions" ? `<b>${esc(v)}</b> signals` : `${esc(k)} <b>${esc(v)}</b>`).join(", ")}${ds.why ? ". " + esc(ds.why) : ""}</p>` : ""}
+    ${g.error ? `<p class="foot-note">The last look failed: ${esc(g.error)}</p>` : ""}
+    <p class="foot-note">In paper mode, a ready signal the plan argues against is graded weak. The review compares both sides. Research, not advice.</p>`;
+}
+function renderThesis() {
+  const p = SEL && planFor(SEL), box = $("#thesis");
+  box.innerHTML = p ? `<h3>Claude's plan for ${esc(SEL)} ${biasTag(p)}</h3><p>${esc(p.thesis)}</p><dl>
+      ${p.levels ? `<dt>Levels</dt><dd class="num">${esc(p.levels)}</dd>` : ""}${p.confirm ? `<dt>Confirms</dt><dd>${esc(p.confirm)}</dd>` : ""}${p.invalidate ? `<dt>Kills it</dt><dd>${esc(p.invalidate)}</dd>` : ""}</dl>`
+    : SEL ? `<p class="plan-sum" style="margin:0">${esc(SEL)} is not in today's plan.</p>` : "";
+}
+function pickDefault(s) {
+  if (SEL) return SEL;
+  const ready = s.signals.find(x => x.status === "ready" && !x.off);
+  const best = Object.entries((planFor && s.game_plan && s.game_plan.focus) || {}).filter(([, v]) => v.bias !== "avoid").sort((a, b) => b[1].conviction - a[1].conviction)[0];
+  return (s.open_trades[0] || {}).symbol || (ready && ready.symbol) || (best && best[0]) || (listRows(s)[0] || {}).symbol || null;
+}
+function select(sym) {
+  sym = String(sym || "").trim().toUpperCase();
+  if (!/^[A-Z.]{1,7}$/.test(sym)) return toast("That is not a ticker.", true);
+  SEL = sym; renderScanList(S); renderThesis(); loadChart(true);
+  for (const el of [$("#thesis"), $(".ch-wrap")]) { el.classList.remove("settle", "settle-2"); void el.offsetWidth; el.classList.add(el.id ? "settle-2" : "settle"); }
+}
+const COL = {entry: "#F2F2F7", stop: "#F6465D", target: "#2EBD85", range: "#FF6BD6", prior: "#C7C7CC", close: "#8E8E93", pre: "#0A84FF"};
+function ema(bars, n) { const k = 2 / (n + 1); let e = null; return bars.map(b => (e = e == null ? b.close : b.close * k + e * (1 - k), {time: b.time, value: e})).slice(n - 1); }
+async function loadChart(force) {
+  if (!SEL || !window.LightweightCharts) return;
+  const key = SEL + IVL;
+  if (!force && key === CHKEY && Date.now() - CHAT < 55000) return;
+  CHKEY = key; CHAT = Date.now();
+  let d;
+  try { d = await api(`/api/chart?symbol=${encodeURIComponent(SEL)}&interval=${IVL}`); }
+  catch (e) { $("#ch-msg").hidden = false; $("#ch-msg").textContent = e.message; return; }
+  if (key !== SEL + IVL) return;
+  const L = LightweightCharts;
+  if (!CH) {
+    const chart = L.createChart($("#chart"), {autoSize: true,
+      layout: {background: {type: "solid", color: "transparent"}, textColor: "#B4BBCB", fontFamily: "Geist, system-ui, sans-serif", fontSize: 12},
+      grid: {vertLines: {color: "rgba(160,170,200,.07)"}, horzLines: {color: "rgba(160,170,200,.07)"}},
+      rightPriceScale: {borderColor: "rgba(160,170,200,.16)"}, timeScale: {borderColor: "rgba(160,170,200,.16)", timeVisible: true, secondsVisible: false, rightOffset: 4},
+      crosshair: {mode: L.CrosshairMode.Normal}, handleScroll: {vertTouchDrag: false}});  // a thumb on the chart still scrolls the page
+    CH = {chart, lines: [],
+      candle: chart.addCandlestickSeries({upColor: "#2EBD85", downColor: "#F6465D", borderVisible: false, wickUpColor: "#2EBD85", wickDownColor: "#F6465D"}),
+      vol: chart.addHistogramSeries({priceFormat: {type: "volume"}, priceScaleId: "", lastValueVisible: false, priceLineVisible: false}),
+      vwap: chart.addLineSeries({color: "#FFD60A", lineWidth: 2, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false}),
+      e9: chart.addLineSeries({color: "#64D2FF", lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false}),
+      e20: chart.addLineSeries({color: "#BF5AF2", lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false})};
+    CH.vol.priceScale().applyOptions({scaleMargins: {top: .82, bottom: 0}});
+  }
+  CH.candle.setData(d.bars);
+  CH.vol.setData(d.bars.map(b => ({time: b.time, value: b.volume, color: b.close >= b.open ? "rgba(46,189,133,.4)" : "rgba(246,70,93,.4)"})));
+  CH.vwap.setData(d.vwap); CH.e9.setData(IVL === "1d" ? [] : ema(d.bars, 9)); CH.e20.setData(IVL === "1d" ? [] : ema(d.bars, 20));
+  CH.lines.forEach(l => CH.candle.removePriceLine(l));
+  const dash = {prior: L.LineStyle.Dashed, pre: L.LineStyle.Dashed, range: L.LineStyle.Solid};
+  CH.lines = d.levels.map(v => CH.candle.createPriceLine({price: v.price, color: COL[v.kind] || "#8E8E93", lineWidth: 1,
+    lineStyle: /low/i.test(v.title) && v.kind !== "stop" ? L.LineStyle.Dotted : dash[v.kind] ?? L.LineStyle.Solid, axisLabelVisible: true, title: v.title}));
+  if (CHAT && force) CH.chart.timeScale().fitContent();
+  $("#ch-msg").hidden = !!d.bars.length; $("#ch-msg").textContent = d.bars.length ? "" : "No candles for " + SEL + " yet.";
+  const last = d.bars.at(-1), first = d.bars.find(b => typeof b.time === "number" && new Date(b.time * 1000).toISOString().slice(0, 10) === d.now.slice(0, 10));
+  const prior = (d.levels.find(v => v.title === "Prior close") || {}).price;
+  $("#ch-sym").textContent = SEL;
+  $("#ch-last").textContent = last ? px(last.close) : "";
+  const chg = last && prior ? (last.close - prior) / prior * 100 : null;
+  $("#ch-sub").innerHTML = chg == null ? (IVL === "1d" ? "Daily candles, a year" : "") : `<span class="${chg >= 0 ? "pos" : "neg"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span> today · delayed`;
+  const tv = $("#ch-tv"), u = (S.chart_urls || {})[SEL] || "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(SEL);
+  tv.href = u; tv.hidden = false;
+  const vw = d.vwap.at(-1);
+  $("#legend").innerHTML = [vw && ["#FFD60A", "VWAP", vw.value], IVL !== "1d" && ["#64D2FF", "9 EMA"], IVL !== "1d" && ["#BF5AF2", "20 EMA"]]
+    .concat(d.levels.map(v => [COL[v.kind], v.title, v.price])).filter(Boolean)
+    .map(([c, t, v]) => `<span><i style="background:${c}"></i>${esc(t)}${v != null ? ` <b>${px(v)}</b>` : ""}</span>`).join("");
+}
 function renderReview() {
   if (!RV) return;
   const v = RV.summary, r = v.results, p = v.plan, sg = v.signals, box = $("#review");
@@ -655,12 +974,12 @@ const FIELDS = [
   ["account_type","Account type","Cash accounts wait a day for sales to settle.","select",["cash","margin"]],
   ["directions","Signals to look for","long = breakouts only. short adds opening-range breakdowns. Read the rules and risks below first.","select",["long","short","both"]],
   ["short_approved","My broker approved this account for short selling","Leave false unless your broker says so. Shorts stay paper only without it, a margin account and $2,000.","select",["false","true"]],
-  ["risk_per_trade_pct","Risk per trade, %","Most you can lose on one trade, as a share of the account. Live mode only: paper mode trades bolder."],
-  ["max_daily_loss_pct","Daily loss limit, %","The desk stops looking once you are down this much. Live mode only: paper mode trades bolder."],
+  ["risk_per_trade_pct","Risk per trade, %","Most you can lose on one trade, as a share of the account. Paper and live."],
+  ["max_daily_loss_pct","Daily loss limit, %","The desk stops looking once you are down this much. Paper and live."],
   ["max_weekly_loss_pct","Weekly loss limit, %","No new entries for the rest of the week (from Monday) once down this much. 0 turns it off. Live mode only: paper mode trades bolder."],
   ["max_drawdown_pct","Drop from your best, %","No new entries once the record is this far under its best point, until you press Reset stops. 0 turns it off. Live mode only: paper mode trades bolder."],
   ["max_losing_streak","Losers in a row","No new entries after this many losing trades in a row, until you press Reset stops. 0 turns it off."],
-  ["max_trades_per_day","Trades per day","Hard cap in live mode. Paper mode has none, so auto paper can learn."],
+  ["max_trades_per_day","Trades per day","Cap in live mode. 0 = no cap. Paper mode has none, so auto paper can learn."],
   ["target_r","Target, in R","2 means the target is twice as far as the stop."],
   ["stop_rule","Stop rule","or-mid, or-low, pct:1 or atr:1.5"],
   ["chase_r","Chase room, in R","How far above the breakout close the buy limit sits."],
@@ -678,7 +997,19 @@ const FIELDS = [
   ["scan_universe","Scan every US stock too","About 300 data requests a pass. Slower.","select",["false","true"]],
   ["pdt_guard","Count day trades","Turn on if your broker still applies the pattern day trader rule to you.","select",["false","true"]],
   ["sec_user_agent","SEC contact","Your name and email. Turns on filings and earnings. Sent only to sec.gov."],
-  ["watchlist","Stocks to scan","Tickers separated by spaces.","area"],
+  ["ntfy_topic","Phone alerts (ntfy topic)","Phone alerts. Install the ntfy app, subscribe to a hard-to-guess topic, paste it here. Empty = off. Anyone who knows the topic can read the alerts."],
+  ["ntfy_server","ntfy server","https://ntfy.sh, or your own ntfy server."],
+  ["auto_list","Pick stocks to scan for me","Each morning the desk picks the most volatile liquid stocks (from its list, yours and Yahoo's screeners) and scans those. paper = in paper mode only; on = both modes; off = your list below.","select",["paper","on","off"]],
+  ["min_rvol","In-play volume floor, x","Live mode: a signal needs its opening volume this many times normal. 0 turns it off. Paper mode uses at least 1.5."],
+  ["min_atr_pct","In-play daily range floor, %","Live mode: a signal needs the stock's average daily range (ATR) at least this % of its price. 0 turns it off. Paper mode uses at least 3."],
+  ["auto_watchlist_movers","Stocks picked each day","How many of the most volatile stocks the desk picks, up to 40. 0 = your always-scan tickers only."],
+  ["watchlist_agent","Watchlist agent (Claude)","Claude reads the candidates' headlines and picks from them, with a reason each. Uses your Claude plan through the claude command. Off = the formula picks.","select",["false","true"]],
+  ["catalysts","Track catalysts","Public news and events (Yahoo, Nasdaq's IPO and earnings calendars, the News skill, your lines below), checked at 8:00 and each hour until 4 PM. Read-only and free.","select",["true","false"]],
+  ["catalyst_slots","Places for catalysts","Of the stocks picked each day, up to this many go to the best tradeable catalysts (scored 40 or more). 0 = daily range only."],
+  ["catalyst_alerts","Catalyst phone alerts","Pushes new catalysts scored 70 or more to your ntfy topic, at most 3 a check. They are reasons to look, not signals.","select",["false","true"]],
+  ["catalyst_watch","Events to watch","One per line: the ticker, then what is happening and its date. Example: TTWO GTA 6 launches 2026-11-19","area"],
+  ["core_watchlist","Always scan these","On the picked list every day, whatever their daily range. Tickers separated by spaces.","area"],
+  ["watchlist","Your stocks to scan","Tickers separated by spaces. Scanned when the desk is not picking its own list, or as the fallback.","area"],
   ["blocked","Never signal","Tickers separated by spaces.","area"],
 ];
 function renderForm() {
@@ -689,9 +1020,11 @@ function renderForm() {
     const id = "set-" + k;
     const ctl = type === "select" ? `<select id="${id}" data-k="${k}">${opts.map(o => `<option ${o === v ? "selected" : ""}>${o}</option>`).join("")}</select>`
       : type === "area" ? `<textarea id="${id}" data-k="${k}" rows="3">${esc(v)}</textarea>` : `<input id="${id}" data-k="${k}" value="${esc(v)}">`;
-    return `<div class="frow ${type === "area" ? "full" : ""}"><label for="${id}">${l}<small>${h}</small></label>${ctl}</div>`;
+    const box = k === "ntfy_topic" ? `<div style="display:grid;gap:6px">${ctl}<button class="btn small gray" id="ntfy-test" type="button">Send test alert</button></div>` : ctl;
+    return `<div class="frow ${type === "area" ? "full" : ""}"><label for="${id}">${l}<small>${h}</small></label>${box}</div>`;
   }).join("");
 }
+
 // ---- Account tab: typed or screenshot-read balance and trade outcomes
 const shots = {};   // per box: {busy, out, err}
 function dropZone(key, what) {
@@ -757,8 +1090,10 @@ document.addEventListener("paste", e => {
 
 async function load() { try { S = await api("/api/state"); render(); if ($("#v-journal").classList.contains("on")) loadReview(); } catch (e) { $("#clock").textContent = "The desk is not answering. Is it still running?"; } }
 
+document.addEventListener("keydown", e => { if (e.target.id === "wl-find" && e.key === "Enter" && e.target.value.trim()) select(e.target.value); });
 document.addEventListener("input", e => {
   const t = e.target;
+  if (t.id === "wl-find" && S) renderScanList(S);
   if (t.dataset.d) { (drafts[t.dataset.id] ||= {})[t.dataset.d] = t.value; }
   if (t.dataset.k) formDirty = true;
 });
@@ -779,6 +1114,9 @@ async function copyForTos() {
 document.addEventListener("click", async e => {
   if (e.target.closest && e.target.closest("#copy-tos")) return copyForTos();
   const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.sel) return select(t.dataset.sel);
+  if (t.dataset.ivl) { IVL = t.dataset.ivl; document.querySelectorAll(".ivl button").forEach(b => b.setAttribute("aria-pressed", b === t)); return loadChart(true); }
+  if (t.id === "plan-go") { t.disabled = true; return act("/api/plan", {}, "Claude is looking again. This takes a minute or two."); }
   if (t.dataset.v) {
     document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b === t));
     document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "v-" + t.dataset.v));
@@ -786,11 +1124,14 @@ document.addEventListener("click", async e => {
     window.scrollTo(0, 0);
     if (t.dataset.v === "research") congress(false);
     if (t.dataset.v === "journal") loadReview();
+    if (t.dataset.v === "graph") loadGraph();
   }
   else if (t.dataset.useCash) { (drafts.acct ||= {}).cash = Number(t.dataset.useCash).toFixed(2); renderAccount(); }
   else if (t.id === "acct-save-cash") { const v = (drafts.acct || {}).cash; if (!v) return toast("Type your cash, or drop a screenshot of it.", true); const d = await act("/api/cash", {kind:"set", amount:v}, "Saved your balance."); if (d) { drafts.acct = {}; shots.balance = null; render(); } }
   else if (t.id === "sw-auto") { const on = t.getAttribute("aria-checked") !== "true";
     await act("/api/settings", {changes:{auto_paper: on}}, on ? "Auto paper is on. It trades ready signals in the practice account." : "Auto paper is off. Trades it already has finish by their own rules."); }
+  else if (t.id === "ntfy-test") { if (formDirty) return toast("Save settings first, then send the test.", true);
+    try { await api("/api/notify/test", {}); toast("Sent. Check your phone."); } catch (e) { toast(e.message, true); } }
   else if (t.id === "sw-auto-weak") { const on = t.getAttribute("aria-checked") !== "true";
     await act("/api/settings", {changes:{auto_paper_weak: on}}, on ? "Auto paper also takes weak signals now. Practice only." : "Auto paper takes ready signals only."); }
   else if (t.id === "paper-reset") {
@@ -815,6 +1156,7 @@ document.addEventListener("click", async e => {
       const big = n => n == null ? "–" : "$" + (n / 1e9).toFixed(2) + "B", g = n => n == null ? "–" : (n > 0 ? "+" : "") + n + "%";
       $("#earnings").innerHTML = `<p style="margin:4px 0 8px"><b>${esc(d.entity)}</b></p><table><tr><th>Quarter</th><th>Revenue</th><th>vs last year</th><th>Profit</th><th>vs last year</th><th>EPS</th><th>Net margin</th><th>Filed</th></tr>${d.rows.map(r => `<tr><td>${esc(r.fiscal)}</td><td class="num">${big(r.revenue)}</td><td class="num">${g(r.revenue_yoy)}</td><td class="num">${big(r.net_income)}</td><td class="num">${g(r.net_income_yoy)}</td><td class="num">${r.eps_diluted ?? "–"}</td><td class="num">${r.net_margin ?? "–"}%</td><td class="num">${esc(r.filed)}</td></tr>`).join("")}</table>`; } catch (err) { toast(err.message, true); } }
   else if (t.id === "cong-go") congress(true);
+  else if (t.id === "cat-go") { try { await api("/api/catalysts", {}); toast("Looking. This takes about a minute."); S.catalysts = Object.assign({}, S.catalysts, {looking: true}); renderCatalysts(S); } catch (err) { toast(err.message, true); } }
 });
 async function congress(refresh) { try { const d = await api("/api/congress" + (refresh ? "?refresh=1" : ""));
   $("#congress").innerHTML = d.filings.length ? `<ul class="plain">${d.filings.map(f => `<li><span class="num">${esc(f.filed)}</span> <b>${esc(f.name)}</b> ${f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer">${esc(f.type)}</a>` : esc(f.type)}</li>`).join("")}</ul>` : `<div class="empty">${esc(d.error || "No filings found for the members in your settings.")}</div>`; } catch (err) { toast(err.message, true); } }

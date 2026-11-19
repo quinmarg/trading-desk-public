@@ -55,6 +55,10 @@ def check(now, clock, st, last_scan, streak, halt, demo, journal_path, tools):
     # 1. the market clock (the Price Alerts skill)
     if len(clock or {}) <= 3:
         add("Market clock", BAD, "The clock tool did not answer: %s" % ((clock or {}).get("reason") or "no reply"))
+    elif clock.get("calendar_known") is False:
+        add("Market clock", WARN, "The holiday calendar in vendor/day-trader-skill does not cover %s, so NYSE holidays and "
+                                  "early closes this year are unknown: the desk may treat a holiday as a trading day. "
+                                  "Update the skills copy." % now[:4])
     else:
         add("Market clock", OK, "Market open." if clock.get("open") else "Market closed (%s)." % (clock.get("reason") or "closed"))
 

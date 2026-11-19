@@ -59,7 +59,7 @@ class PracticeShorts(PaperBase):
         a = self.look(11.95)
         a = self.look(12.20, high=12.20)              # stop 12.10 reached
         self.assertEqual(a["positions"], [])
-        self.assertEqual(a["cash"], round(400 - 5 * (12.20 - 11.95), 2))
+        self.assertEqual(a["cash"], round(400 - 5 * (12.21 - 11.95), 2))     # the cover pays the 1-cent slippage guess
 
     def test_never_long_and_short_at_once_and_no_cover_without_a_short(self):
         self.hold("F", qty=3, price=12.00)
@@ -210,7 +210,7 @@ class AutoPaperShorts(AutoBase):
         self.px["F"] = q(11.85)
         self.tick()
         c = self.d.j.trade(t["id"])
-        self.assertEqual((c["exit_reason"], c["exit_price"], c["pnl"]), ("flat", 11.85, 0.5))
+        self.assertEqual((c["exit_reason"], c["exit_price"], c["pnl"]), ("flat", 11.86, 0.45))   # market cover + slippage guess
         self.assertEqual(self.d.paper.snapshot()["positions"], [])
 
     def test_shorts_switched_off_are_left_alone(self):

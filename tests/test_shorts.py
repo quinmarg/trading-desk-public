@@ -429,17 +429,41 @@ class DeskShorts(DeskCase):
         d.src.demo = False                                      # live rules, but nothing below touches the network
         self.addCleanup(setattr, d.src, "demo", True)
         chart = self.tsla(bar("10:10", 362.2, 362.3, 361.2, 361.5))
-        real = charts.daily_closes
-        self.addCleanup(setattr, charts, "daily_closes", real)
+        real = charts.daily_bars
+        self.addCleanup(setattr, charts, "daily_bars", real)
         for closes, want in (([300.0] * 250, "uptrend"), ([300.0] * 50, "cannot check the trend")):
-            charts.daily_closes = lambda source, symbol, closes=closes: closes
+            charts.daily_bars = lambda source, symbol, closes=closes: days(closes)
             status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
             self.assertEqual(status, "blocked")
             self.assertIn(want, " ".join(sig["problems"]))
-        charts.daily_closes = lambda source, symbol: [400.0] * 250
+        charts.daily_bars = lambda source, symbol: days([400.0] * 250)
         status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
         self.assertEqual(sig["trend"], {"direction": "down", "average": 400.0, "days": 200})
         self.assertNotIn("trend", " ".join(sig["problems"]))
+        self.assertNotIn("restriction", " ".join(sig["problems"]))
+
+    def test_a_10pct_drop_yesterday_keeps_the_short_sale_restriction_on_today(self):
+        # SEC Rule 201: the price test lasts the rest of the day it triggers AND the next day.
+        d = self.desk(starting_balance=2000)
+        d.src.demo = False
+        self.addCleanup(setattr, d.src, "demo", True)
+        chart = self.tsla(bar("10:10", 362.2, 362.3, 361.2, 361.5))
+        real = charts.daily_bars
+        self.addCleanup(setattr, charts, "daily_bars", real)
+        hist = days([400.0] * 249)
+        hist[-1]["l"] = 355.0                                    # yesterday: down 11% intraday from 400
+        charts.daily_bars = lambda source, symbol: hist
+        status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
+        self.assertEqual(status, "blocked")
+        self.assertIn("runs through today", " ".join(sig["problems"]))
+
+
+def days(closes):
+    """Daily bars before 2026-10-19 (the demo day) with these closes."""
+    import datetime
+    start = datetime.date(2026, 10, 18) - datetime.timedelta(days=len(closes))
+    return [{"date": (start + datetime.timedelta(days=i)).isoformat(), "o": c, "h": c, "l": c, "c": c}
+            for i, c in enumerate(closes)]
 
 
 if __name__ == "__main__":

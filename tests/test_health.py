@@ -84,3 +84,21 @@ class Streak(DemoCase):
         self.assertEqual(h["level"], "warn")                         # demo data is the one note
         self.assertIsNone(h["trust"])
         self.assertEqual([i["name"] for i in h["items"]], ["Market clock", "Scanner", "Market data", "Skills", "Record"])
+
+
+class Calendar(Check):
+    def test_a_year_past_the_holiday_calendar_warns(self):
+        h = self.run_check({"at": "2028-01-03 10:15", "scanned": 290, "failed": 0, "error": None, "halt": None},
+                           now="2028-01-03 10:15", clock=dict(CLOCK, date="2028-01-03", calendar_known=False))
+        self.assertEqual(self.item(h, "Market clock")["level"], "warn")
+        self.assertIn("does not cover 2028", self.item(h, "Market clock")["detail"])
+
+    def test_the_vendored_clock_matches_the_nyse_calendar(self):
+        # NYSE's 2026-2028 holiday and early-close release (2025-12-23), checked against NYSE's published calendar.
+        want = {"2026-11-26 12:00": (False, None), "2026-11-27 12:00": (True, "13:00"), "2026-12-24 12:00": (True, "13:00"),
+                "2026-12-25 12:00": (False, None), "2027-11-26 12:00": (True, "13:00"), "2027-12-24 12:00": (False, None),
+                "2026-11-30 12:00": (True, "16:00")}
+        for now, (opens, closes) in want.items():
+            c = skills.run("alerts", ["clock", "--json", "--now", now], self.tmp).json
+            self.assertEqual((c["open"], c.get("closes")), (opens, closes), now)
+            self.assertTrue(c["calendar_known"], now)

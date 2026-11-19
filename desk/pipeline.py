@@ -15,6 +15,7 @@ from . import settings as S
 from . import shorts
 from . import skills
 from . import slipinfo
+from . import volscreen
 
 
 def workdir(date, symbol, side="long"):
@@ -199,11 +200,20 @@ def _evaluate(symbol, st, journal, source, hit=None):
     if res["verdict"] != "PASS":
         sig["problems"] += ["Risk: %s" % x for x in sig["risk"]["reasons"]]
         return "blocked", sig
+    off = volscreen.check(sig, st, source)
+    if off:
+        sig["problems"].append(off)
+        return "weak", sig
     ep = (sig["odds"] or {}).get("edge_points")
     if sig["odds"] is None and not source.demo:
         sig["problems"].append("No Time Machine odds for this one, so the desk cannot grade it.")
         return "weak", sig
     if ep is not None and ep < st["min_edge_points"]:
+        if volscreen.skips_floor(sig, st):
+            sig["warnings"].append("Time Machine edge is %+.1f points, under your floor of %+.1f, but this stock is in play "
+                                   "and on in-play days the Time Machine has rated the target too unlikely, so paper "
+                                   "mode does not hold it back." % (ep, st["min_edge_points"]))
+            return "ready", sig
         sig["problems"].append("Time Machine edge is %+.1f points, under your floor of %+.1f." % (ep, st["min_edge_points"]))
         return "weak", sig
     return "ready", sig
@@ -285,17 +295,23 @@ def _evaluate_short(symbol, st, journal, source, chart=None):
                                "a stop that close is hit by normal wiggle."
                                % (100.0 * pl["risk_per_share"] / pl["entry"], pl["risk_per_share"], st["min_stop_pct"]))
 
-    # the short-sale restriction, and the trend
+    # the short-sale restriction (SEC Rule 201: it lasts the rest of the day it starts and all of the next), and the trend
     day_low = min(b["l"] for b in bars)
+    try:
+        days = charts.daily_bars(source, symbol)
+    except charts.ChartError as e:
+        days = None
+        sig["warnings"].append("Daily history could not be read (%s)." % e)
+    past = [b for b in days or [] if b["date"] < today]
     if shorts.restricted(day_low, chart.get("prev_close")):
         sig["problems"].append("Short-sale restriction: %s is down %.0f%% or more from yesterday's close (%.2f). "
                                "Shorts can only fill above the best bid for the rest of today and tomorrow."
                                % (symbol, shorts.SSR_DROP_PCT, chart["prev_close"]))
-    try:
-        direction, avg = shorts.trend(charts.daily_closes(source, symbol), pl["entry"])
-    except charts.ChartError as e:
-        direction, avg = None, None
-        sig["warnings"].append("Daily history could not be read (%s)." % e)
+    elif len(past) >= 2 and shorts.restricted(past[-1]["l"], past[-2]["c"]):
+        sig["problems"].append("Short-sale restriction: yesterday %s fell %.0f%% or more under the close before it (%.2f), "
+                               "so the restriction runs through today. Shorts can only fill above the best bid."
+                               % (symbol, shorts.SSR_DROP_PCT, past[-2]["c"]))
+    direction, avg = shorts.trend([b["c"] for b in days] if days else None, pl["entry"])
     sig["trend"] = {"direction": direction, "average": avg, "days": shorts.TREND_DAYS}
     if direction == "up":
         sig["problems"].append("%s is above its %d-day average (%.2f): an uptrend. The desk only shorts below it."
@@ -368,11 +384,20 @@ def _evaluate_short(symbol, st, journal, source, chart=None):
         sig["problems"] += ["Risk: %s" % x for x in sig["risk"]["reasons"]]
     if sig["problems"]:
         return "blocked", sig
+    off = volscreen.check(sig, st, source)
+    if off:
+        sig["problems"].append(off)
+        return "weak", sig
     ep = (sig["odds"] or {}).get("edge_points")
     if sig["odds"] is None and not source.demo:
         sig["problems"].append("No Time Machine odds for this one, so the desk cannot grade it.")
         return "weak", sig
     if ep is not None and ep < st["min_edge_points"]:
+        if volscreen.skips_floor(sig, st):
+            sig["warnings"].append("Time Machine edge is %+.1f points, under your floor of %+.1f, but this stock is in play "
+                                   "and on in-play days the Time Machine has rated the target too unlikely, so paper "
+                                   "mode does not hold it back." % (ep, st["min_edge_points"]))
+            return "ready", sig
         sig["problems"].append("Time Machine edge is %+.1f points, under your floor of %+.1f." % (ep, st["min_edge_points"]))
         return "weak", sig
     return "ready", sig

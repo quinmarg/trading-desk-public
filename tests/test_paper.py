@@ -131,11 +131,11 @@ class PaperSelling(PaperBase):
         self.hold()                                             # bought 5 at 59.90, stop 59.50
         self.px["KO"] = q(59.40, low=59.40)
         by = self.by_kind()
-        self.assertEqual((by[("STOP", "SELL")]["status"], by[("STOP", "SELL")]["avg_fill"]), ("FILLED", 59.4))
+        self.assertEqual((by[("STOP", "SELL")]["status"], by[("STOP", "SELL")]["avg_fill"]), ("FILLED", 59.39))   # 59.40 less the 1-cent slippage guess
         self.assertEqual(by[("LIMIT", "SELL")]["status"], "CANCELED")
         a = self.account()
         self.assertEqual(a["positions"], [])
-        self.assertEqual(a["cash"], round(400 - 5 * 59.9 + 5 * 59.4, 2))
+        self.assertEqual(a["cash"], round(400 - 5 * 59.9 + 5 * 59.39, 2))
         self.assertEqual(a["available"], round(400 - 5 * 59.9, 2))     # a cash account: proceeds settle tomorrow
         self.d.src.set_now("2026-10-20 10:15")
         self.rows()                                             # a look at the orders settles the account
@@ -163,7 +163,7 @@ class PaperSelling(PaperBase):
         self.px["KO"] = q(60.20)
         self.d.paper.place_order("PAPER", O.single("KO", "SELL", 5, "MARKET"))
         self.assertEqual(self.account()["positions"], [])
-        self.assertEqual(self.rows()[-1]["avg_fill"], 60.2)
+        self.assertEqual(self.rows()[-1]["avg_fill"], 60.19)          # a market sale pays the slippage guess
 
     def test_cancelling_the_buy_cancels_its_children(self):
         self.place()
@@ -220,3 +220,31 @@ class PaperStore(PaperBase):
         Scheduler(self.d, log=lambda *_: None).tick(wall=1e9)
         raw = json.loads((self.d.paper.path()).read_text())
         self.assertEqual(raw["orders"][0]["status"], "FILLED")
+
+
+class PaperSlippage(PaperBase):
+    """Stop and market fills pay est_cost_per_share: paper fills otherwise look better than live ones."""
+
+    def test_no_slippage_guess_fills_at_the_price(self):
+        S.update({"est_cost_per_share": 0.0})
+        self.hold()
+        self.px["KO"] = q(59.40, low=59.40)
+        self.assertEqual(self.by_kind()[("STOP", "SELL")]["avg_fill"], 59.4)
+
+    def test_a_bigger_guess_moves_the_stop_fill_further(self):
+        S.update({"est_cost_per_share": 0.05})
+        self.hold()
+        self.px["KO"] = q(59.40, low=59.40)
+        self.assertEqual(self.by_kind()[("STOP", "SELL")]["avg_fill"], 59.35)
+
+
+class PracticeShortLog(PaperBase):
+    def test_practice_short_fills_are_in_the_log_the_review_counts(self):
+        from desk import paper as P
+        self.px["KO"] = q(60.50)
+        self.d.paper.place_order(P.ACCOUNT, P.short_bracket("KO", 2, 60.40, 61.00, 59.50))
+        self.px["KO"] = q(59.40, high=60.50)
+        self.d.paper.settle()
+        log = [e["message"] for e in self.d.j.events(limit=50) if e["kind"] == "paper"]
+        self.assertTrue(any("sold short 2 KO" in m for m in log), log)
+        self.assertTrue(any("bought to cover 2 KO" in m for m in log), log)

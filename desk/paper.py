@@ -18,7 +18,8 @@ Practice shorts (docs/SHORTING.md), placed only in this account, never at a brok
   BUY_TO_COVER MARKET   fills at the price
 A stock is never long and short here at once, and a cover never buys more than is short.
 If the day's low or high moved past a limit or stop between two looks, the order fills at its own
-price. Orders fill whole, only while the market is open, and every order ends at the close like a DAY
+price. A STOP or MARKET fill (a stop-out, a flat-by-the-close sale, a cover) is moved against you by
+est_cost_per_share, your slippage guess, because a real one fills at the market; limit fills are not. Orders fill whole, only while the market is open, and every order ends at the close like a DAY
 order. Money from a sale can be spent the next trading day, like a cash account. Real fills differ:
 this is for practising the steps, not for measuring results.
 """
@@ -143,11 +144,19 @@ class PaperAccount:
         self._seen = (at, have)
         return {s: have[s] for s in symbols if have.get(s)}
 
+    def price(self, symbol):
+        """One symbol's last price (from the latest look when it is fresh), or None when there is none."""
+        with self._lock:
+            return (self._look({symbol}).get(symbol) or {}).get("price")
+
     # ---- filling -----------------------------------------------------------------
     def _fill(self, s, o, px, now):
         leg = _legs(o)
         sym, side, qty = leg["instrument"]["symbol"], leg["instruction"], int(o["quantity"])
-        px = round(float(px), 2)
+        if o.get("orderType") in ("STOP", "MARKET"):     # these go to the market: they pay the slippage guess
+            slip = float(S.load().get("est_cost_per_share") or 0)
+            px = float(px) + (slip if side in ("BUY", "BUY_TO_COVER") else -slip)
+        px = round(max(float(px), 0.01), 2)
         pos = s["positions"].get(sym) or {"qty": 0, "cost": 0.0}
         if side in ("SELL_SHORT", "BUY_TO_COVER") or (side == "BUY" and pos["qty"] < 0):
             return self._fill_short(s, o, sym, side, qty, px, pos, now)
@@ -168,13 +177,15 @@ class PaperAccount:
             s["positions"].pop(sym, None)
         o.update(status="FILLED", filledQuantity=qty, remainingQuantity=0,
                  orderActivityCollection=[{"executionLegs": [{"quantity": qty, "price": px}]}])
+        self._log_fill(o, "bought" if side == "BUY" else "sold", sym, qty, px, now)
+        return True
+
+    def _log_fill(self, o, did, sym, qty, px, now):
         try:                                    # every practice fill is in the paper journal's log, for the review
             self.d.j.add_event("paper", "Practice account: %s %d %s at %.2f (%s, order %s)."
-                               % ("bought" if side == "BUY" else "sold", qty, sym, px, str(o.get("orderType")).lower(),
-                                  o.get("orderId")), now, sym)
+                               % (did, qty, sym, px, str(o.get("orderType")).lower(), o.get("orderId")), now, sym)
         except Exception:
             pass
-        return True
 
     def _fill_short(self, s, o, sym, side, qty, px, pos, now):
         """A practice short. Selling short sets the full value aside, like the journal does (no leverage);
@@ -201,6 +212,7 @@ class PaperAccount:
             s["positions"].pop(sym, None)
         o.update(status="FILLED", filledQuantity=qty, remainingQuantity=0,
                  orderActivityCollection=[{"executionLegs": [{"quantity": qty, "price": px}]}])
+        self._log_fill(o, "sold short" if side == "SELL_SHORT" else "bought to cover", sym, qty, px, now)
         return True
 
     @staticmethod

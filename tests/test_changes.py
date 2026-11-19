@@ -19,7 +19,7 @@ class Changes(DemoCase):
 
     def test_a_saved_change_lands_in_the_event_log_once(self):
         d = self.desk()
-        d.change_settings({"target_r": 3, "max_trades_per_day": 2})    # the second is not a change
+        d.change_settings({"target_r": 3, "max_trades_per_day": 0})    # the second is not a change
         ev = [e["message"] for e in d.j.events() if e["kind"] == "settings"]
         self.assertEqual(ev, ["Setting changed: target_r from 2 to 3."])
         with self.assertRaises(S.SettingsError):

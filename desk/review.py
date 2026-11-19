@@ -266,6 +266,59 @@ def scan_stats(scans):
             "breakouts": sum(s.get("hits") or 0 for s in ran), "new_signals": sum(s.get("new_signals") or 0 for s in ran)}
 
 
+def scan_lists(lists, signals, outcomes=()):
+    """Each day the desk picked its own scan list (desk/autolist.py): how big it was and how that day's signals
+    on it did on the replay, newest first. The way to judge whether the picking helps."""
+    by = {o["signal_id"]: o for o in outcomes}
+    rows = []
+    for date, d in sorted((lists or {}).items(), reverse=True):
+        listed = set(d.get("symbols") or [])
+        sig = [x for x in signals if x.get("date") == date and x.get("symbol") in listed]
+        rs = [by[x["id"]]["r"] for x in sig if x["id"] in by and by[x["id"]]["result"] in JUDGED and by[x["id"]].get("r") is not None]
+        rows.append({"date": date, "stocks": len(listed), "error": d.get("error"), "signals": len(sig),
+                     "ready": sum(1 for x in sig if x.get("status") == "ready"), "replayed": len(rs), "avg_r": _r2(_mean(rs)),
+                     "top": (d.get("symbols") or [])[:8], "catalyst": list(d.get("catalyst") or [])})
+    return rows
+
+
+def catalyst_vs_plain(lists, signals, outcomes=()):
+    """Signals on the picked lists, split by why the stock was there: a catalyst (desk/catalysts.py) or the plain
+    volatility pick. Same replay R as above, so the two can be compared."""
+    by = {o["signal_id"]: o for o in outcomes}
+    out = {k: {"signals": 0, "rs": []} for k in ("catalyst", "plain")}
+    for date, d in (lists or {}).items():
+        if d.get("error"):
+            continue
+        cat, listed = set(d.get("catalyst") or []), set(d.get("symbols") or [])
+        for x in signals:
+            if x.get("date") == date and x.get("symbol") in listed:
+                g = out["catalyst" if x["symbol"] in cat else "plain"]
+                g["signals"] += 1
+                o = by.get(x["id"])
+                if o and o["result"] in JUDGED and o.get("r") is not None:
+                    g["rs"].append(o["r"])
+    return {k: {"signals": g["signals"], "replayed": len(g["rs"]), "avg_r": _r2(_mean(g["rs"])),
+                "win_rate": _r2(100.0 * sum(1 for r in g["rs"] if r > 0) / len(g["rs"])) if g["rs"] else None}
+            for k, g in out.items()}
+
+
+def plan_agreement(signals, outcomes=()):
+    """Signals by what Claude's game plan said (desk/analyst.py): with the plan, against it, or not in it.
+    Same replay R as above, so you can see whether the research earns its place."""
+    by = {o["signal_id"]: o for o in outcomes}
+    out = {k: {"signals": 0, "rs": []} for k in ("with", "against", "none")}
+    for x in signals:
+        p = (x.get("payload") or {}).get("plan")
+        g = out["none" if not p else "with" if p.get("agrees") else "against"]
+        g["signals"] += 1
+        o = by.get(x["id"])
+        if o and o["result"] in JUDGED and o.get("r") is not None:
+            g["rs"].append(o["r"])
+    return {k: {"signals": g["signals"], "replayed": len(g["rs"]), "avg_r": _r2(_mean(g["rs"])),
+                "win_rate": _r2(100.0 * sum(1 for r in g["rs"] if r > 0) / len(g["rs"])) if g["rs"] else None}
+            for k, g in out.items()}
+
+
 def signal_counts(signals):
     out = {}
     for s in signals:
@@ -273,7 +326,7 @@ def signal_counts(signals):
     return out
 
 
-def summary(trades, signals, events=(), rulesets=None, min_trades=MIN_TRADES, outcomes=(), scans=()):
+def summary(trades, signals, events=(), rulesets=None, min_trades=MIN_TRADES, outcomes=(), scans=(), lists=None):
     sig_by_id = {s["id"]: s for s in signals}
     res = results(trades)
     return {
@@ -288,6 +341,9 @@ def summary(trades, signals, events=(), rulesets=None, min_trades=MIN_TRADES, ou
         "practice_fills": sum(1 for e in events if e.get("kind") == "paper"),
         "odds_by_edge": odds_by_edge(signals, outcomes), "held_back": held_back(signals, outcomes),
         "stops_log": [{"ts": e["ts"], "message": e["message"]} for e in events if e.get("kind") == "stops"][:30],
+        "scan_lists": scan_lists(lists, signals, outcomes),
+        "catalyst_vs_plain": catalyst_vs_plain(lists, signals, outcomes),
+        "plan_agreement": plan_agreement(signals, outcomes),
     }
 
 
@@ -394,6 +450,23 @@ def report(mode, s, now, rules_hash=None):
           "  %d scans over %d days, %d failed. Average %s charts read, %s left out for gaps. %d breakouts, %d new signals."
           % (sc["scans"], sc["days"], sc["failed"], f(sc["avg_charts"], "%.1f"), f(sc["avg_gaps"], "%.1f"), sc["breakouts"],
              sc["new_signals"]) if sc else "  none logged yet"]
+    L += ["", "SCAN LISTS THE DESK PICKED (newest first; signals on the list, and their average replay R)"]
+    L += ["  %s  %s" % (d["date"], d["error"]) if d["error"] else
+          "  %s  %d stocks (%s...), %d signals, %d ready, %d replayed, average %s"
+          % (d["date"], d["stocks"], " ".join(d["top"]), d["signals"], d["ready"], d["replayed"], fr(d["avg_r"]))
+          for d in (s.get("scan_lists") or [])[:15]] or ["  none: the desk has not picked a list yet (Settings, Pick stocks to scan for me)"]
+    cv = s.get("catalyst_vs_plain") or {}
+    L += ["", "CATALYST PICKS AGAINST THE VOLATILITY PICKS (signals on the picked list, by why the stock was on it)"]
+    L += ["  %s: %d signals, %d replayed, average %s, win rate %s%%" % (
+        "On the list for a catalyst" if k == "catalyst" else "On the list for its daily range", v["signals"], v["replayed"],
+        fr(v["avg_r"]), f(v["win_rate"], "%.1f")) for k, v in sorted(cv.items()) if v["signals"]] \
+        or ["  none yet: no signal has come from a picked list with catalysts on it"]
+    pa = s.get("plan_agreement") or {}
+    L += ["", "CLAUDE'S GAME PLAN (signals by whether the plan agreed; against = held back in paper mode)"]
+    L += ["  %s: %d signals, %d replayed, average %s, win rate %s%%" % (
+        {"with": "With the plan", "against": "Against the plan", "none": "Not in a plan"}[k], v["signals"], v["replayed"],
+        fr(v["avg_r"]), f(v["win_rate"], "%.1f")) for k, v in pa.items() if v["signals"]] \
+        or ["  none yet"]
     L += [""] + _decision_lines(s.get("decisions")) + ["BY RULE SET"]
     L += ["  %s%s: %d closed, %s, average R %s" % (g["rules"], " (since %s)" % g["first_seen"] if g["first_seen"] else "",
                                                   g["closed"], _usd(g["total"]), f(g["avg_r"])) for g in s["by_rules"]] or ["  none"]

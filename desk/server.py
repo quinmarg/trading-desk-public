@@ -5,6 +5,7 @@ anything that changes data must carry the X-Desk header, which a page on
 another website cannot send without a preflight this server never grants.
 """
 import json
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -13,7 +14,7 @@ from .engine import DeskError
 from .paths import STATIC
 
 TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
+         ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8"}
 
 
 def make_handler(desk, scheduler=None):
@@ -56,6 +57,11 @@ def make_handler(desk, scheduler=None):
                     return self._send(200, desk.earnings((parse_qs(u.query).get("symbol") or [""])[0]))
                 if u.path == "/api/congress":
                     return self._send(200, desk.congress(refresh="refresh" in parse_qs(u.query)))
+                if u.path == "/api/chart":                  # read-only: candles and levels for the Desk's chart
+                    q = parse_qs(u.query)
+                    return self._send(200, desk.chart((q.get("symbol") or [""])[0], (q.get("interval") or ["5m"])[0]))
+                if u.path == "/api/graph":                  # read-only: made or lost over time, every paper account
+                    return self._send(200, desk.graph())
                 if u.path == "/api/review":                 # read-only: results and the review report
                     return self._send(200, desk.review())
                 if u.path == "/api/export":                 # read-only: text for TradingView and thinkorswim
@@ -106,8 +112,22 @@ def make_handler(desk, scheduler=None):
                     out = {"settings": desk.change_settings(body.get("changes") or {})}
                 elif path == "/api/stops/reset":          # you read the record; the losing run and drawdown restart
                     out = desk.reset_stops()
+                elif path == "/api/notify/test":          # one sample phone alert, from the saved settings
+                    desk.test_alert()
+                    out = {}
                 elif path == "/api/mode":                 # paper or live; live needs the word typed
                     out = {"mode": desk.set_mode(body.get("mode"), body.get("confirm"))}
+                elif path == "/api/catalysts":            # look again now, in the background; reads public data only
+                    if desk.src.demo:
+                        raise DeskError("The demo has no live news. Run the desk without --demo to track catalysts.")
+                    threading.Thread(target=desk.find_catalysts, daemon=True, name="desk-catalysts").start()
+                    out = {"queued": True}
+                elif path == "/api/plan":                 # Claude looks again now, in the background
+                    if desk.src.demo:
+                        raise DeskError("The demo has no live market. Run the desk without --demo for Claude's game plan.")
+                    if not desk.planning():
+                        threading.Thread(target=desk.make_plan, daemon=True, name="desk-plan").start()
+                    out = {"looking": True}
                 elif path == "/api/scan":
                     if scheduler:
                         scheduler.scan_now()

@@ -23,7 +23,7 @@ class Settings(DeskCase):
         bad = [{"nope": 1}, {"risk_per_trade_pct": 50}, {"risk_per_trade_pct": "x"}, {"risk_per_trade_pct": True},
                {"account_type": "ira"}, {"flat_by": "25:00"}, {"no_entries_before": "16:00"},
                {"stop_rule": "tight"}, {"stop_rule": "pct:0"}, {"max_daily_loss_pct": 1, "risk_per_trade_pct": 2},
-               {"watchlist": ["TS LA!"]}, {"scan_universe": "yes"}, {"max_trades_per_day": 0}]
+               {"watchlist": ["TS LA!"]}, {"scan_universe": "yes"}, {"max_trades_per_day": -1}]
         for b in bad:
             with self.assertRaises(S.SettingsError, msg=str(b)):
                 S.validate(b)
@@ -55,6 +55,7 @@ class TradesCap(unittest.TestCase):
     def test_live_uses_the_setting_paper_has_none(self):
         self.assertEqual(S.trades_cap({"mode": "live", "max_trades_per_day": 2}), 2)
         self.assertEqual(S.trades_cap({"mode": "paper", "max_trades_per_day": 2}), S.PAPER_TRADES_CAP)
+        self.assertEqual(S.trades_cap({"mode": "live", "max_trades_per_day": 0}), S.PAPER_TRADES_CAP)   # 0 = no cap
         self.assertGreaterEqual(S.PAPER_TRADES_CAP, 50)
 
 
@@ -64,11 +65,12 @@ class PaperBold(unittest.TestCase):
         live = S.limits(dict(st, mode="live"), 400)
         paper = S.limits(dict(st, mode="paper"), 400)
         self.assertEqual(live["max_loss_per_trade"], 8.0)
-        self.assertEqual(paper["max_loss_per_trade"], 20.0)
+        self.assertEqual(paper["max_loss_per_trade"], 8.0)                 # risk a trade and a day: your Settings, both modes
+        self.assertEqual(paper["max_daily_loss"], live["max_daily_loss"])
         self.assertEqual(paper["cash_buffer"], 0.0)
-        self.assertGreater(paper["max_daily_loss"], live["max_daily_loss"])
-        self.assertEqual(S.risk(dict(st, mode="live"))["risk_per_trade_pct"], st["risk_per_trade_pct"])
-        self.assertEqual(S.skills_config(dict(st, mode="paper"), 400)["max_loss_per_trade_usd"], 20.0)
+        self.assertEqual(live["cash_buffer"], 20.0)
+        self.assertEqual(S.risk(dict(st, mode="paper"))["max_drawdown_pct"], 50.0)
+        self.assertEqual(S.risk(dict(st, mode="live"))["max_drawdown_pct"], st["max_drawdown_pct"])
 
     def test_paper_buys_with_4x_the_account(self):
         st = S.validate({})

@@ -7,15 +7,21 @@ import datetime
 import math
 import re
 import threading
+import time
 
+from . import analyst
 from . import decide
 from . import auto as A
+from . import autolist
 from . import breaker
+from . import catalysts as C
 from . import changes
 from . import charts
 from . import exports
+from . import graph as G
 from . import health
 from . import mode as M
+from . import notify
 from . import outcome
 from . import pipeline
 from . import review as R
@@ -25,7 +31,7 @@ from . import shorts
 from . import skills
 from . import stamp
 from .journal import Journal, JournalError
-from .paths import FIXTURES, data_dir
+from .paths import FIXTURES, account_name, data_dir
 
 MAX_EVALS_PER_SCAN = 8
 
@@ -54,6 +60,9 @@ class Desk:
         self.j, self.src = journal, source
         self.lock = threading.RLock()
         self._clock = (None, None)
+        self._session = (None, None)            # (date, closing time or None), see session_close
+        self._cat_lock = threading.Lock()       # one catalyst gather at a time (morning, hourly, Refresh)
+        self._plan_lock = threading.Lock()      # one game-plan look at a time (desk/analyst.py)
         st = S.load()
         self._journals = {st["mode"]: journal}  # one journal per mode, opened on first use and kept open
         self.j.seed(M.seed_amount(st["mode"], st["starting_balance"]), self.src.now())
@@ -70,6 +79,25 @@ class Desk:
         c = r.json if isinstance(r.json, dict) else {"open": False, "reason": r.message, "date": now[:10]}
         self._clock = (now, c)
         return c
+
+    def session_close(self, date):
+        """That New York date's closing time ("16:00", or "13:00" on an early close), or None when the market does
+        not open at all (a weekend or an NYSE holiday). Asked once a day; when the clock tool cannot run, a weekday
+        counts as a normal day and it asks again next time."""
+        if self._session[0] == date:
+            return self._session[1]
+        c = self.clock(date + " 12:00")
+        if "weekday" not in c:
+            return "16:00" if datetime.date.fromisoformat(date).weekday() < 5 else None
+        self._session = (date, c.get("closes"))
+        return self._session[1]
+
+    def day_flat_by(self, st, now):
+        """Your flat-by time for today: on a 1:00 PM early close it moves up 3 hours with the close (15:55 -> 12:55),
+        the same rule the exit planner uses, so a trade is never left open past the bell."""
+        if not self.clock(now).get("early_close"):
+            return st["flat_by"]
+        return "%02d:%02d" % divmod(max(_minutes(st["flat_by"]) - 180, 9 * 60 + 35), 60)
 
     def settle_date(self, now):
         """When money from a sale made now can be used again. Paper mode: at once, so auto paper can keep learning."""
@@ -140,14 +168,19 @@ class Desk:
 
     # ---- scanning ----------------------------------------------------
     def premarket(self):
-        """The Chart Scanner's daily setups: the charts worth watching today."""
+        """Today's scan list (desk/autolist.py), then the Chart Scanner's daily setups: the charts worth watching today."""
         st, now = S.load(), self.src.now()
+        fetch = C.cached(charts.fetch)       # the catalysts and the pick read each chart once
+        if st["catalysts"] and not self.src.demo and not C.todays(self.j.get("catalysts"), now[:10]):
+            self.find_catalysts(st, now, fetch)
+        if autolist.enabled(st) and not self.src.demo and not autolist.active(st, self.j.get("scan_list"), now[:10]):
+            self.pick_list(st, now, fetch=fetch)          # a restart later the same day keeps the morning's list
         wd = self.scan_dir(now)
         args = ["daily", "--json", "--no-write", "--quiet", "--now", now]
         if self.src.demo:
             args += ["--offline", FIXTURES / "trader-scanner" / "daily-spark-2026-10-19.json"]
         else:
-            args += ["--symbols", ",".join(st["watchlist"])]
+            args += ["--symbols", ",".join(self.scan_symbols(st, now))]
         r = skills.run("scanner", args, wd, timeout=600)
         d = r.json if isinstance(r.json, dict) else {}
         out = {"date": now[:10], "at": now, "as_of": d.get("as_of"), "scanned": d.get("scanned"),
@@ -156,6 +189,155 @@ class Desk:
                "error": None if d else r.message}
         self.j.put("premarket", out)
         return out
+
+    def pick_list(self, st, now, save=True, fetch=charts.fetch):
+        """The desk's own scan list for today, kept for the dashboard and, day by day, for the review.
+        Today's best tradeable catalysts get reserved places on it (desk/catalysts.py).
+        save=False only shows it (python3 -m desk agent without --apply)."""
+        cats = C.for_list(C.todays(self.j.get("catalysts"), now[:10]), st["catalyst_slots"]) if st["catalysts"] else []
+        out = autolist.pick(st, now, fetch=fetch, wd=data_dir() / "work" / now[:10] / "_agent", catalysts=cats)
+        if not save:
+            return out
+        self.j.put("scan_list", out)
+        days = self.j.get("scan_lists", {})
+        days[out["date"]] = {"symbols": [r["symbol"] for r in out["symbols"]], "error": out["error"],
+                             "catalyst": [r["symbol"] for r in out["symbols"] if r.get("catalyst")]}
+        self.j.put("scan_lists", dict(sorted(days.items())[-90:]))
+        if C.todays(self.j.get("catalysts"), now[:10]):
+            self._save_catalysts(C.mark(self.j.get("catalysts"), out))
+        self.j.add_event("scan list", out["error"] or "Today's scan list: %d stocks, %s: %s."
+                         % (len(out["symbols"]), "picked by Claude" if out.get("by") == "claude" else
+                            "catalysts first, then the most volatile" if any(r.get("catalyst") for r in out["symbols"]) else "most volatile first",
+                            ", ".join(r["symbol"] for r in out["symbols"][:10])), now)
+        return out
+
+    # ---- catalysts (desk/catalysts.py) --------------------------------
+    def find_catalysts(self, st=None, now=None, fetch=charts.fetch):
+        """Gathers today's catalysts, notes which made the scan list, logs them for the review and, with
+        Catalyst alerts on, pushes the biggest new ones. None when a gather is already running."""
+        if not self._cat_lock.acquire(blocking=False):
+            return None
+        try:
+            st, now = st or S.load(), now or self.src.now()
+            out = C.gather(st, now, data_dir() / "work" / now[:10] / "_catalysts", fetch=fetch)
+            self._save_catalysts(C.mark(out, self.j.get("scan_list")))
+            if out["items"]:
+                self.j.add_event("catalysts", "Catalysts: %s." % ", ".join(
+                    "%s %d (%s)" % (r["symbol"], r["score"], r["reason"][:60]) for r in out["items"][:5]), now,
+                    key="catalysts-%s-%s" % (now[:10], now[11:13]))
+            if st["catalyst_alerts"] and not self.src.demo:
+                sent = self.j.get("catalyst_alerted", {})
+                done = sent.get(now[:10], [])
+                new = [r for r in out["items"] if r["score"] >= C.ALERT_SCORE and r["symbol"] not in done][:3]
+                for r in new:
+                    notify.send_catalyst(r, st)
+                if new:
+                    sent = {d: v for d, v in sent.items() if d >= now[:10]}      # today's only
+                    sent[now[:10]] = done + [r["symbol"] for r in new]
+                    self.j.put("catalyst_alerted", sent)
+            return out
+        finally:
+            self._cat_lock.release()
+
+    # ---- the research analyst (desk/analyst.py) -------------------------
+    def planning(self):
+        return self._plan_lock.locked()
+
+    def make_plan(self, update=None):
+        """Claude's game plan: the morning plan, or (update=True, or a plan already made today) the hourly look,
+        which may add stocks to today's scan list. One at a time; returns the plan, or None when busy or failed."""
+        if not self._plan_lock.acquire(blocking=False):
+            return None
+        try:
+            st, now = S.load(), self.src.now()
+            today, plan = now[:10], self.j.get("game_plan") or {}
+            update = (plan.get("date") == today and plan.get("focus")) if update is None else update
+            picked = autolist.active(st, self.j.get("scan_list"), today)
+            sl = self.j.get("scan_list") if picked else {"symbols": [{"symbol": s, "why": "On your watchlist."}
+                                                                     for s in st["watchlist"]]}
+            wd = data_dir() / "work" / today / "_analyst"
+            try:
+                if update:
+                    new, adds = analyst.update(st, now, plan, sl, self.j.signals(date=today), self.j.get("catalysts"), wd=wd)
+                else:
+                    new, adds = analyst.morning(st, now, sl, self.j.get("premarket"), wd=wd), []
+            except Exception as e:           # Claude missing, signed out or odd: the desk trades on without a plan
+                why = str(e)[:300]
+                self.j.put("game_plan", dict(plan, error=why, error_at=now) if plan.get("date") == today else
+                           {"date": today, "at": now, "error": why, "focus": {}})
+                self.j.add_event("plan", "Claude's game plan failed: %s" % why, now, key="plan-fail-%s" % now[:13])
+                return None
+            if adds and picked:
+                sl["symbols"] += adds
+                self.j.put("scan_list", sl)
+                days = self.j.get("scan_lists", {})
+                if today in days:
+                    days[today]["symbols"] = [r["symbol"] for r in sl["symbols"]]
+                    days[today]["added"] = list(days[today].get("added") or []) + [a["symbol"] for a in adds]
+                    self.j.put("scan_lists", days)
+            elif adds:
+                new["adds"] = []             # your watchlist is in use, so nothing is added to it
+                adds = []
+            if new["kind"] == "morning" and st["mode"] == "paper":
+                new["day_settings"] = self._day_settings(st, now, new, [r["symbol"] for r in sl["symbols"]] if picked else [])
+            elif adds and st["mode"] == "paper" and (self.j.get("plan_settings") or {}).get("date") == today:
+                self.change_settings({"watchlist": list(S.load()["watchlist"]) + [a["symbol"] for a in adds]})
+            self.j.put("game_plan", new)
+            log = self.j.get("game_plans", {})
+            log.setdefault(today, []).append({"at": now, "kind": new["kind"], "mood": new["market"]["mood"],
+                                              "bias": {k: [v["bias"], v["conviction"]] for k, v in new["focus"].items()},
+                                              "adds": new.get("adds") or []})
+            self.j.put("game_plans", dict(sorted(log.items())[-90:]))
+            f = new["focus"]
+            self.j.add_event("plan", "%s: market %s. Long %s. Short %s. Avoid %s.%s" % (
+                "Game plan" if new["kind"] == "morning" else "Plan update",
+                new["market"]["mood"], *[" ".join(s for s, v in f.items() if v["bias"] == b) or "none" for b in analyst.BIASES],
+                " Added %s." % ", ".join(new["adds"]) if new.get("adds") else ""), now, key="plan-%s" % now)
+            if st["ntfy_topic"] and not self.src.demo:
+                if new["kind"] == "morning":
+                    notify.send_body(analyst.message(new, sl, st["mode"]), st)
+                elif adds or new.get("changes"):
+                    notify.send_body(analyst.update_message(new, adds), st)
+            return new
+        finally:
+            self._plan_lock.release()
+
+    def _day_settings(self, st, now, plan, picked):
+        """Paper mode: the morning plan writes today's stocks and the day's settings into Settings (desk/analyst.py
+        day_settings). Yesterday's day changes are put back first wherever you have not changed them since, so each day
+        starts from your own settings. Every change goes through change_settings, so it is in the log with old and new."""
+        rec = self.j.get("plan_settings") or {}
+        base = dict(rec.get("base") or {})
+        cur = S.load()
+        for k in analyst.DAY_KEYS:
+            if k not in base or (rec.get("set") or {}).get(k, cur[k]) != cur[k]:
+                base[k] = cur[k]                     # never set by the plan, or you changed it since: yours now
+        wanted, why = analyst.day_settings({"settings_for_today": plan.get("settings_for_today")}, base, picked)
+        wanted = dict({k: base[k] for k in analyst.DAY_KEYS}, **wanted)
+        try:
+            self.change_settings(wanted)
+        except Exception as e:                       # an odd value: keep your settings as they are
+            self.j.add_event("plan", "The game plan's settings for today were not saved: %s" % str(e)[:200], now)
+            return {}
+        self.j.put("plan_settings", {"date": now[:10], "base": base, "set": wanted, "why": why})
+        changed = {k: v for k, v in wanted.items() if base.get(k) != v}
+        self.j.add_event("plan", "Settings for today from the game plan: %s.%s" % (
+            ", ".join("%s %s" % (k.replace("_", " "), "%d stocks" % len(v) if k == "watchlist" else v) for k, v in changed.items())
+            or "no changes", " Why: %s" % why if why else ""), now, key="plan-settings-%s" % now[:10])
+        return {"set": changed, "why": why, "base": {k: base[k] for k in changed}}
+
+    def _save_catalysts(self, cats):
+        """Today's view, and the day's log the review reads (a later gather adds to the day, it does not wipe it)."""
+        self.j.put("catalysts", cats)
+        days = self.j.get("catalyst_days", {})
+        day = {r["symbol"]: r for r in days.get(cats["date"], [])}
+        day.update({r["symbol"]: C.log_row(r) for r in cats["items"][:30]})
+        days[cats["date"]] = sorted(day.values(), key=lambda r: -(r.get("score") or 0))
+        self.j.put("catalyst_days", dict(sorted(days.items())[-90:]))
+
+    def scan_symbols(self, st, now):
+        """Today's picked list when auto_list is on for this mode and the pick worked, else your watchlist."""
+        return autolist.symbols(st, self.j.get("scan_list"), now[:10])
 
     def _universe_due(self, st, now):
         if self.src.demo or not st["scan_universe"]:
@@ -198,6 +380,7 @@ class Desk:
             if summary["halt"]:
                 self.j.put("last_scan", summary)
                 return summary
+            st = dict(st, flat_by=self.day_flat_by(st, now))      # an early close moves flat-by up for every new signal
             # Practice-only shorts are looked for in paper mode only; in live mode they would sit next to real slips.
             practice = shorts.status(st, self.j.equity())["paper_only"]
             shorts_on = st["directions"] != "long" and not (practice and st["mode"] == "live")
@@ -230,7 +413,7 @@ class Desk:
             args += ["--universe", uni]
             self.j.put("universe_scan_at", now)
         else:
-            args += ["--symbols", ",".join(st["watchlist"])]
+            args += ["--symbols", ",".join(self.scan_symbols(st, now))]
         r = skills.run("scanner", args, wd, timeout=900)
         d = r.json if isinstance(r.json, dict) else None
         if d is None:
@@ -243,7 +426,7 @@ class Desk:
                         "unusable": int(counts.get("unusable") or 0)})
         fate = {}       # what happened to each breakout, for the scan log (summary["detail"])
         notes = {sym: decide.note(reason="no close above the range high, or the scanner left the chart out")
-                 for sym in st["watchlist"]}
+                 for sym in self.scan_symbols(st, now)}
         now_min, spend = _minutes(now[11:16]), self.spendable(st, now)
         fresh = []
         for h in hits:
@@ -272,6 +455,7 @@ class Desk:
             notes[h["symbol"]] = decide.note(reason="not graded: more than %d fresh breakouts this scan" % MAX_EVALS_PER_SCAN)
         for h in fresh[:MAX_EVALS_PER_SCAN]:
             status, sig = pipeline.evaluate(h["symbol"], st, self.j, self.src, hit=h)
+            status = analyst.grade(self.j.get("game_plan"), h["symbol"], "long", status, sig, st, now[:10])
             summary["evaluated"] += 1
             fate[h["symbol"]] = status or "no trigger: %s" % str(sig)[:120]
             if status is None:
@@ -281,9 +465,10 @@ class Desk:
             notes[h["symbol"]] = decide.note(signal=sid, status=status)
             if sid and status == "ready":
                 summary["new_signals"] += 1
-                self.j.add_event("signal", "%s: buy %d at %.2f or lower, stop %.2f, target %.2f. Good until %s."
-                                 % (h["symbol"], sig["qty"], sig["limit"], sig["stop"], sig["target"], sig["valid_until"]),
-                                 now, h["symbol"], key="signal-%d" % sid)
+                if self.j.add_event("signal", "%s: buy %d at %.2f or lower, stop %.2f, target %.2f. Good until %s."
+                                    % (h["symbol"], sig["qty"], sig["limit"], sig["stop"], sig["target"], sig["valid_until"]),
+                                    now, h["symbol"], key="signal-%d" % sid):
+                    notify.send_signal(sig, st, st["mode"], self.src.demo)   # once per signal, in the background
         summary["detail"] = [{"symbol": h["symbol"], "at": h["at"], "price": h["price"], "fate": fate.get(h["symbol"])}
                              for h in hits]
         return notes
@@ -296,7 +481,7 @@ class Desk:
         if self.src.demo:
             symbols = sorted(p.stem for p in self.src.chart_offline("")[1].glob("*.json"))
         else:
-            symbols = st["watchlist"]
+            symbols = self.scan_symbols(st, now)
         notes, fresh = {}, []
         for sym in symbols:
             if sym in st["blocked"]:
@@ -334,6 +519,7 @@ class Desk:
             notes[sym] = decide.note(reason="not graded: more than %d fresh breakdowns this scan" % MAX_EVALS_PER_SCAN)
         for sym, chart, _ in fresh[:MAX_EVALS_PER_SCAN]:
             status, sig = pipeline.evaluate_short(sym, st, self.j, self.src, chart=chart)
+            status = analyst.grade(self.j.get("game_plan"), sym, "short", status, sig, st, now[:10])
             if status is None:
                 notes[sym] = decide.note(reason=str(sig)[:200])
                 continue
@@ -342,9 +528,10 @@ class Desk:
             if sid and status == "ready":
                 summary["short_new"] += 1
                 summary["new_signals"] += 1
-                self.j.add_event("signal", "SHORT%s %s: sell short %d at %.2f or higher, stop %.2f, target %.2f. Good until %s."
-                                 % (" (practice only)" if sig["paper_only"] else "", sym, sig["qty"], sig["limit"],
-                                    sig["stop"], sig["target"], sig["valid_until"]), now, sym, key="signal-%d" % sid)
+                if self.j.add_event("signal", "SHORT%s %s: sell short %d at %.2f or higher, stop %.2f, target %.2f. Good until %s."
+                                    % (" (practice only)" if sig["paper_only"] else "", sym, sig["qty"], sig["limit"],
+                                       sig["stop"], sig["target"], sig["valid_until"]), now, sym, key="signal-%d" % sid):
+                    notify.send_signal(sig, st, st["mode"], self.src.demo)
         return notes
 
     # ---- watching ----------------------------------------------------
@@ -545,11 +732,20 @@ class Desk:
                 self.j.add_event("settings", sentence, now)
             return new
 
+    def test_alert(self):
+        """Settings > Send test alert: one sample push to your phone, now."""
+        try:
+            notify.send_test(S.load(), self.src.demo)
+        except ValueError as e:
+            raise DeskError(str(e))
+
     def set_mode(self, new, typed=None):
         """Paper or live. Each has its own journal, so this swaps the whole record."""
         with self.lock:
             if new not in M.MODES:
                 raise DeskError("Mode must be paper or live.")
+            if new == "live" and account_name():
+                raise DeskError("Extra paper accounts are practice only. Switch to live on the main desk.")
             st, now = S.load(), self.src.now()
             if new == st["mode"]:
                 return new
@@ -606,7 +802,7 @@ class Desk:
             lines = screenshot.ocr(path)
         except screenshot.ScreenshotError as e:
             raise DeskError(str(e))
-        out = {"kind": kind, "image": str(path.relative_to(data_dir())), "text": "\n".join(l["text"] for l in lines[:80]),
+        out = {"kind": kind, "image": path.relative_to(data_dir()).as_posix(), "text": "\n".join(l["text"] for l in lines[:80]),
                "suggest": None}
         if kind == "balance":
             found = screenshot.read_balance(lines)
@@ -730,7 +926,11 @@ class Desk:
             "limits": lim, "day": self.j.day(today), "stats": self.j.stats(),
             "signals": signals, "open_trades": open_trades,
             "trades": self.j.trades(limit=50), "events": self.j.events(limit=40),
-            "last_scan": self.j.get("last_scan"), "premarket": self.j.get("premarket"),
+            "last_scan": self.j.get("last_scan"), "premarket": self.j.get("premarket"), "account_name": account_name(),
+            "scan_list": {"on": autolist.enabled(st), "today": self.j.get("scan_list"),
+                          "using": "picked" if autolist.active(st, self.j.get("scan_list"), today) else "watchlist"},
+            "catalysts": dict(self.j.get("catalysts") or {}, on=st["catalysts"], looking=self._cat_lock.locked()),
+            "game_plan": dict(self.j.get("game_plan") or {}, on=st["analyst"], looking=self.planning()),
             "settings": st,
             "shorts": shorts.status(st, equity),
             "auto": self.auto.summary(st),
@@ -742,14 +942,82 @@ class Desk:
         out["export_unknown"] = exports.tradingview_text(exports.todays_symbols(out))[1]
         return out
 
+    CHART_RANGES = {"1m": ("1d", "1m"), "5m": ("5d", "5m"), "1d": ("1y", "1d")}
+
+    def chart(self, symbol, interval="5m"):
+        """The Desk's chart: candles (time = New York wall clock as if UTC, so the axis reads New York time), session
+        VWAP, and the levels to draw: prior day high, low and close, today's opening range, and today's slip or open
+        trade for this stock. Read-only; Yahoo's free data, delayed."""
+        st, now = S.load(), self.src.now()
+        sym = str(symbol or "").strip().upper()
+        if interval not in self.CHART_RANGES:
+            raise DeskError("interval must be 1m, 5m or 1d")
+        try:
+            if self.src.demo:
+                if interval != "5m":
+                    raise DeskError("The demo has only 5-minute charts.")
+                c = charts.intraday(self.src, sym)
+            else:
+                c = charts.fetch(sym, *self.CHART_RANGES[interval], prepost=interval != "1d")
+        except charts.ChartError as e:
+            raise DeskError(str(e))
+        def ts(b):
+            return int(datetime.datetime.strptime(b["date"] + " " + b["start"], "%Y-%m-%d %H:%M")
+                       .replace(tzinfo=datetime.timezone.utc).timestamp()) if interval != "1d" else b["date"]
+        bars = [b for b in c["bars"] if b["date"] <= now[:10]]
+        out = {"symbol": sym, "interval": interval, "now": now,
+               "bars": [{"time": ts(b), "open": b["o"], "high": b["h"], "low": b["l"], "close": b["c"], "volume": b["v"]} for b in bars],
+               "vwap": [], "levels": []}
+        if interval == "1d":
+            return out
+        today = [b for b in bars if b["date"] == now[:10] and charts.OPEN_MIN <= b["minute"] < charts.CLOSE_MIN]
+        days = sorted({b["date"] for b in bars if b["date"] < now[:10]})
+        prior = [b for b in bars if days and b["date"] == days[-1] and charts.OPEN_MIN <= b["minute"] < charts.CLOSE_MIN]
+        lv = out["levels"]
+        if prior:
+            lv += [{"price": max(b["h"] for b in prior), "kind": "prior", "title": "Prior high"},
+                   {"price": min(b["l"] for b in prior), "kind": "prior", "title": "Prior low"},
+                   {"price": prior[-1]["c"], "kind": "close", "title": "Prior close"}]
+        pre = [b for b in bars if b["date"] == now[:10] and b["minute"] < charts.OPEN_MIN]
+        if pre:
+            lv += [{"price": max(b["h"] for b in pre), "kind": "pre", "title": "Premarket high"},
+                   {"price": min(b["l"] for b in pre), "kind": "pre", "title": "Premarket low"}]
+        orb = [b for b in today if b["minute"] < charts.OPEN_MIN + st["or_minutes"]]
+        if orb and len(orb) * (1 if interval == "1m" else 5) >= st["or_minutes"]:
+            lv += [{"price": max(b["h"] for b in orb), "kind": "range", "title": "Range high"},
+                   {"price": min(b["l"] for b in orb), "kind": "range", "title": "Range low"}]
+        cum_pv = cum_v = 0.0
+        for b in today:
+            cum_pv += (b["h"] + b["l"] + b["c"]) / 3 * b["v"]
+            cum_v += b["v"]
+            if cum_v:
+                out["vwap"].append({"time": ts(b), "value": round(cum_pv / cum_v, 4)})
+        for t in self.j.open_trades():
+            if t["symbol"] == sym:
+                lv += [{"price": t["entry_price"], "kind": "entry", "title": "Entry"}, {"price": t["stop"], "kind": "stop", "title": "Stop"},
+                       {"price": t["target"], "kind": "target", "title": "Target"}]
+                break
+        else:
+            for sg in self.j.signals(date=now[:10]):
+                p = sg["payload"]
+                if sg["symbol"] == sym and sg["status"] in ("ready", "taken", "weak") and p.get("limit"):
+                    lv += [{"price": p["limit"], "kind": "entry", "title": "Buy limit" if p.get("side") != "short" else "Sell limit"},
+                           {"price": p["stop"], "kind": "stop", "title": "Stop"}, {"price": p["target"], "kind": "target", "title": "Target"}]
+                    break
+        return out
+
     def review(self, journal=None, mode=None):
         """The record laid out for reading: numbers and the plain-text report. Changes nothing."""
         st, now = S.load(), self.src.now()
         j, mode = journal or self.j, mode or st["mode"]
         summ = R.summary(j.trades(limit=100000), j.signals(limit=100000), j.events(limit=100000), j.get("rulesets", {}),
-                         outcomes=j.outcomes(), scans=j.scans(limit=100000))
+                         outcomes=j.outcomes(), scans=j.scans(limit=100000), lists=j.get("scan_lists", {}))
         summ["decisions"] = decide.counts(j.decisions(limit=100000))
         return {"mode": mode, "now": now, "summary": summ, "text": R.report(mode, summ, now, stamp.rules_hash(st))}
+
+    def graph(self):
+        """The Graph tab: made or lost over time, for this record and every paper account (desk/graph.py)."""
+        return G.summary(self.j.path)
 
     def exports(self):
         """Today's stocks as text for TradingView and thinkorswim. Read-only: nothing is sent anywhere."""

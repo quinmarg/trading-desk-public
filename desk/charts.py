@@ -50,13 +50,15 @@ def parse(doc, symbol=""):
     return {"symbol": got or symbol.upper(), "prev_close": float(prev) if prev else None, "bars": bars}
 
 
-def fetch(symbol, rng, interval, timeout=15):
-    """One read-only GET of Yahoo's chart for a ticker. Tries the second host when the first fails."""
+def fetch(symbol, rng, interval, timeout=15, prepost=False):
+    """One read-only GET of Yahoo's chart for a ticker. Tries the second host when the first fails.
+    prepost=True adds the extended-hours bars (the Desk's chart draws the premarket high and low from them)."""
     symbol = symbol.strip().upper()
     if not (0 < len(symbol) <= 7 and symbol.replace(".", "").isalpha()):
         raise ChartError("%r is not a ticker" % symbol)
     path = "/v8/finance/chart/%s?%s" % (urllib.parse.quote(symbol),
-                                         urllib.parse.urlencode({"range": rng, "interval": interval}))
+                                         urllib.parse.urlencode(dict({"range": rng, "interval": interval},
+                                                                   **({"includePrePost": "true"} if prepost else {}))))
     last = "no answer"
     for host in HOSTS:
         req = urllib.request.Request("https://%s%s" % (host, path), method="GET",
@@ -80,11 +82,12 @@ def intraday(source, symbol):
     return fetch(symbol, "1d", "5m")
 
 
-def daily_closes(source, symbol):
-    """About a year of daily closes, oldest first, or None when there are none (the demo has no daily file)."""
+def daily_bars(source, symbol):
+    """About a year of daily bars ({date, o, h, l, c, ...}), oldest first, or None when there are none (the demo has
+    no daily file). The last bar can be today's, still forming."""
     if source.demo:
         return None
-    return [b["c"] for b in fetch(symbol, "1y", "1d")["bars"]]
+    return fetch(symbol, "1y", "1d")["bars"]
 
 
 def session_bars(chart, now, bar_minutes=5):

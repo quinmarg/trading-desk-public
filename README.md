@@ -57,7 +57,8 @@ The demo keeps its data in `data-demo/`, apart from your real record in
 
 ## What a day looks like
 
-1. Before the open the desk lists daily-chart setups to watch.
+1. At 8:00 the desk picks today's stocks to scan (paper mode), lists daily-chart setups to watch, and Claude
+   writes the game plan (if the `claude` command is set up).
 2. From 9:45 AM to 3:30 PM New York time it scans after every 5-minute candle
    closes.
 3. A breakout that fits your account becomes a slip:
@@ -137,12 +138,171 @@ brokers may need more label words in `desk/screenshot.py`. Details:
   rules. Every settings change is logged; write rule changes up in
   [docs/CHANGES.md](docs/CHANGES.md).
 
+## Volatile stocks (paper mode)
+
+In paper mode the desk keeps to stocks **in play**: a signal counts only when the stock's opening
+volume is at least 1.5x its normal and its daily range (ATR) is at least 3 % of its price; otherwise it
+is graded weak, "Not in play". Each morning it also picks its own scan list, the 40 most volatile
+liquid stocks, and shows why each one is there under "Stocks to scan today" (Settings, "Pick stocks to
+scan for me": paper, on or off; your watchlist is the fallback). The research, the backtest
+(`python3 tools/vol_backtest.py`), the before-and-after numbers and a volatile watchlist to paste into
+Settings are in [docs/VOLATILITY.md](docs/VOLATILITY.md). Live mode is unchanged unless you set
+`min_rvol` or `min_atr_pct`.
+
+## Phone alerts (ntfy)
+
+The desk can push each new **Ready** slip to your phone through
+[ntfy](https://ntfy.sh): the order, the reward to risk, the odds and up to
+three of the headlines it pulled, with buttons for the articles and the chart.
+
+1. Install the ntfy app and subscribe to a long, hard-to-guess topic name.
+2. Settings > **Phone alerts (ntfy topic)**: paste the same name, Save.
+3. Press **Send test alert** to check your phone.
+
+Empty topic = off. The demo never pushes. A failed push is logged and
+dropped; it never stops a scan. Weak and blocked signals are not pushed.
+
+> [!NOTE]
+> On ntfy.sh, topics are public: **anyone who knows the topic name can read
+> your alerts.** Pick a name nobody would guess, or run your own ntfy server
+> and put its `https://` address in Settings > **ntfy server**.
+
+## Claude's game plan (optional, needs the `claude` command)
+
+If the [Claude Code](https://claude.com/claude-code) `claude` command is installed and signed in, Claude
+studies the day's list each morning after the 8:00 pick (`desk/analyst.py`, the **Desk** tab's right side).
+Without it the desk trades on without a plan; turn it off in Settings (`analyst`).
+
+- **What it reads**, all free and read-only: SPY, QQQ and IWM's daily trend; for each stock on the list its daily
+  chart in numbers (20/50/200-day averages, RSI, 20-day high and low, prior day's levels, narrow-range days, strength
+  against SPY), the Chart Scanner's daily setups, its catalyst and its headlines.
+- **How it decides**: the playbook in [docs/STRATEGIES.md](docs/STRATEGIES.md), 20 rules distilled from studies of
+  opening-range breakouts on stocks in play, intraday momentum, gaps and news, and the published rules of successful
+  traders and systematic bots, each marked strong, some or weak evidence.
+- **What it writes**: the market's mood, what to watch for today, and per stock a bias (long, short or avoid), a
+  conviction from 1 to 5, a thesis, the levels, what confirms it and what kills it. With ntfy set up, it goes to your
+  phone too.
+- **All day**: each hour from 10:00 to 3:00 it looks again at how each stock trades (change on the day, VWAP,
+  volume), the signals so far, today's movers and new catalysts. It updates the plan and may add up to 5 in-play
+  stocks to the list (`analyst_adds`). **Look again now** runs it at once.
+- **Settings for the day (paper mode)**: the plan writes today's stocks into Settings' watchlist and may set the
+  directions, lower risk per trade to between half of yours and yours, and move the last entry earlier, with a reason
+  in the log. Each morning starts from your own settings again; a setting you changed yourself stays yours.
+- **Signals**: each slip shows what the plan said. In paper mode a ready signal the plan argues against (avoid, or the
+  other side at conviction 3+) is graded weak (`plan_filter`: paper, on or off). The review's "CLAUDE'S GAME PLAN"
+  section compares signals with and against the plan, so the research has to earn its place.
+
+It runs `claude -p` with Sonnet on your own Claude plan, with no tools and no MCP; headlines are treated as data.
+Live mode only gets the notes on each slip: no filter, no settings changes.
+
+### Optional: start the desk at 7:50 on weekdays (Mac)
+
+A launch agent can start the desk before the 8:00 pick. `tools/app/desk-control.sh start` does nothing when the
+desk is already running. Save this as `~/Library/LaunchAgents/com.example.tradingdesk.morning.plist`, with
+`/path/to/trading-desk` replaced by your own folder:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.example.tradingdesk.morning</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/bash</string><string>/path/to/trading-desk/tools/app/desk-control.sh</string><string>start</string></array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>50</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>50</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>50</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>50</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>50</integer></dict>
+  </array>
+</dict>
+</plist>
+```
+
+The times are your Mac's local time: set 7:50 in New York time for your time zone. Load it with
+`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.tradingdesk.morning.plist` and turn it off with
+`launchctl bootout gui/$(id -u)/com.example.tradingdesk.morning`. A sleeping Mac runs it when it wakes; to wake the
+Mac for it, `sudo pmset repeat wakeorpoweron MTWRF 07:45:00`.
+
+## The Desk tab
+
+A TradingView-style workspace: today's list on the left with Claude's bias for each stock, the chart in the middle
+(1-minute, 5-minute or daily candles with VWAP, the 9 and 20 EMA, the premarket, prior-day and opening-range lines and
+the slip's entry, stop and target), and the plan, account and signals on the right. Type any ticker in the list's box
+and press Enter to chart it. Chart settings and how to set up TradingView the same way:
+[docs/CHART-SETTINGS.md](docs/CHART-SETTINGS.md). The chart is TradingView's open-source Lightweight Charts and the
+fonts are Geist and Schibsted Grotesk, all stored in `desk/static/vendor` (licences there); nothing loads from the
+internet.
+
+## The daily list, the watchlist agent, the graph and extra paper accounts
+
+- **One list a day.** Before the open the desk reads a year of daily bars for its own pool of liquid
+  stocks, your watchlist, your **Always scan these** tickers and the names on Yahoo's free most-active,
+  gainers and losers screeners. Your always-scan tickers go on the list whatever their range; the
+  **Stocks picked each day** most volatile of the rest join them (40 by default). It all shows under
+  "Stocks to scan today", each with why.
+- **Watchlist agent** (Settings, off by default): Claude reads those candidates' headlines and picks
+  from them, with a reason each, avoiding halts, fixed-price buyouts and reverse splits. It uses the
+  signed-in `claude` command on your Claude plan, with Haiku, no tools and no MCP, and can only pick
+  stocks the formula already found. If Claude fails or keeps too few, the formula's picks stand.
+  `python3 -m desk agent` is a dry run; add `--apply` to make the picks today's list.
+- **Graph tab**: made or lost over time for the bot, you and the total; every paper account on one
+  chart; results by day. Closed trades only.
+- **Extra paper accounts**, practice only, each with its own cash, journal and tickers in
+  `data/accounts/NAME`, on the first free port from 8791:
+
+  ```bash
+  python3 -m desk --account growth --tickers "TSLA NVDA AMD"
+  ```
+
+  Run it again without `--tickers` to reopen it. Its alerts say its name. It cannot switch to live.
+  A new account starts with Claude's game plan and catalyst alerts off, so the main desk is the only one
+  using your Claude plan each hour and pushing those to your phone; turn them on in its Settings if you want.
+- **Trades per day**: 0 means no cap, and 0 is the default, in live mode too. Paper mode never had one.
+
+## Catalysts: news and events that move stocks
+
+The **Catalysts** tab follows public news and events and ranks them, so the morning list can lean
+toward stocks with a reason to move today (`desk/catalysts.py`). Free, read-only, no key, no account:
+
+- **Where it looks**: Yahoo's trending tickers and its most-active, gainers and losers screeners;
+  Nasdaq's IPO calendar and earnings calendar (companies worth $2 billion or more, today and the next
+  weekday); the News skill's headlines (and SEC filings when you set an SEC contact); a year of daily
+  bars; and your own lines under **Events to watch** in Settings, one per line, like
+  `TTWO GTA 6 launches 2026-11-19`.
+- **Second-order names**: clear peers, suppliers and investors (EA and RBLX next to Take-Two; Amazon
+  and Google next to the Anthropic IPO), each with its reason. The list is short and hand-kept.
+- **The score** (0 to 100): fresh 30, big 25, confirmed by more than one source 25, a lively chart 20.
+- **One list.** The best tradeable catalysts scored 40 or more take up to **Places for catalysts**
+  (10) of the stocks picked each morning, with the catalyst as the reason. The rest of the places
+  go to the most volatile, as before. The tab marks each catalyst "On today's list", "Not on the list"
+  or "Watch".
+- **New listings**: an IPO has no history, and the opening-range rules need 15 days of daily bars.
+  It shows as "Watch, not tradeable yet" with the date it should become eligible (holidays can push
+  that a day later).
+- **When**: at 8:00 AM New York with the morning pick, then each hour until 4 PM on weekdays, or when
+  you press **Look again now**. Later looks add to the tab; they never change the day's list.
+- **Phone alerts** (Settings, Catalyst phone alerts, off): new catalysts scored 70 or more go to your
+  ntfy topic, at most 3 a look, each once a day. They say they are not signals.
+- **The review** logs each day's catalysts and compares signals on the list for a catalyst against
+  signals on it for their daily range ("CATALYST PICKS AGAINST THE VOLATILITY PICKS").
+
+Web text is treated as data: it is cut to one line and shown, never followed. A catalyst is a reason
+to look, not a signal; a trade still needs its breakout. The desk still never places a real order.
+
 ## Things that keep you out of trouble
 
 - **Pause** (Desk tab): no new signals and no new fills until you resume.
 - **Health** (Settings): the clock, the last scan, the data, the skills copy
   and which record is in use. After three failed scans in a row the Desk tab
-  says "Do not trust the list right now".
+  says "Do not trust the list right now". It warns when the holiday calendar
+  in the skills copy does not cover the current year (it covers 2026-2027).
+- **Holidays and early closes**: on an NYSE holiday there is no game plan and
+  no hourly catalyst look. On a 1:00 PM early close (2026-11-27, 2026-12-24,
+  2027-11-26) new entries stop 3 hours early and flat-by moves up with the
+  close, 15:55 to 12:55, for every new signal and for auto paper.
 - **Risk stops over more than a day** (Settings, under the daily loss limit;
   `desk/breaker.py`): a **weekly loss limit** (default 8 % of the account,
   clears on Monday), a **drop from your best point** (default 15 %) and
@@ -154,7 +314,9 @@ brokers may need more label words in `desk/screenshot.py`. Details:
 - **Closest stop** (`min_stop_pct`, default 0.3 %): a stop nearer the entry
   than that blocks the signal.
 - **Slippage guess** (`est_cost_per_share`, default $0.01): each slip also
-  shows reward to risk after it.
+  shows reward to risk after it. It never blocks a signal. In the practice
+  account a stop or market fill (a stop-out, a flat-by sale, a cover) fills
+  that much worse than the price, as a real one would; set 0 for exact fills.
 - The desk can only ever run the Order Executor skill's `show` command (the
   ticket text). Every other command is refused in `desk/guards.py`.
 
@@ -276,7 +438,15 @@ desk/scheduler.py   the background loop
 desk/server.py      local web server (127.0.0.1 only)
 desk/screenshot.py  reads numbers off broker screenshots (Mac)
 desk/exports.py     watchlist export and chart links
-desk/static/        the dashboard
+desk/volscreen.py   is the stock in play: ATR % and opening relative volume
+desk/autolist.py    the desk's own scan list each morning, most volatile first
+desk/backtest.py    the rule over 60 days of 5-minute bars (tools/vol_backtest.py)
+desk/analyst.py     Claude's game plan: morning and hourly looks, day settings (optional)
+desk/agent.py       the watchlist agent: Claude picks from the morning's candidates (optional)
+desk/notify.py      phone alerts for ready signals and big catalysts (ntfy)
+desk/catalysts.py   public news and events, scored, with places on the morning list
+desk/graph.py       the Graph tab: made or lost over time, every paper account
+desk/static/        the dashboard (vendor/: Lightweight Charts and two fonts, with licences)
 thinkorswim/        chart study for thinkorswim
 tradingview/        chart study for TradingView, install steps
 tools/              Mac Dock app and the screenshot reader source
@@ -295,3 +465,7 @@ It includes an unmodified copy of
 [vendor/day-trader-skill/LICENSE](vendor/day-trader-skill/LICENSE) and
 repeated in [LICENSE](LICENSE). Market data comes from free public sources
 (Yahoo Finance charts, SEC EDGAR, the House Clerk); follow their terms of use.
+
+The Desk tab's chart uses [Lightweight Charts](https://github.com/tradingview/lightweight-charts) by
+TradingView, under the Apache License 2.0, and the fonts Geist and Schibsted Grotesk, under the SIL Open
+Font License 1.1. Their licence files are in `desk/static/vendor`.

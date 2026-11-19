@@ -30,8 +30,11 @@ def rules(st):
     r = {k: eff[k] for k in RULE_KEYS if k in eff}
     if "mode" in st:
         r.update(max_trades_per_day=S.trades_cap(st), leverage=S.leverage(st))
+    r.update({k: v for k, v in S.screen(st).items() if v})     # only when on, so old rule sets keep their code
     if st.get("auto_paper_weak") and st.get("mode") == "paper":
         r["auto_paper_weak"] = True
+    if st.get("analyst") and (st.get("plan_filter") == "on" or (st.get("plan_filter") == "paper" and st.get("mode") == "paper")):
+        r["plan_filter"] = True                              # the game plan holds signals back: a new rule set
     return r
 
 

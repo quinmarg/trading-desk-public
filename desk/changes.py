@@ -6,7 +6,7 @@ made on the dashboard is logged with the old and the new value.
 """
 
 # Values that may hold a name, an email or an account id are logged as "changed" only.
-PRIVATE = ("sec_user_agent",)
+PRIVATE = ("sec_user_agent", "ntfy_topic")
 # Changed through their own switch with its own check, never through the settings form.
 RESERVED = ("mode",)
 

@@ -127,7 +127,7 @@ class AutoPaper:
                 self._event("%s %d %s at %.2f (%s). %s $%.2f." % (_closed_word(e), e["qty"], sym, price, reason,
                                                                  "Made" if pnl >= 0 else "Lost", abs(pnl)), now, sym)
                 continue
-            flat_by = str(p.get("flat_by") or st["flat_by"])
+            flat_by = min(str(p.get("flat_by") or st["flat_by"]), self.d.day_flat_by(st, now))   # early close: 12:55
             late = now[:10] > str(e.get("filled_at") or e["at"])[:10] or now[11:16] >= flat_by
             if late and not e.get("flat_order") and self.d.clock(now).get("open"):
                 oid = self._flatten(acct, e, rows)
@@ -200,6 +200,10 @@ class AutoPaper:
                 why = "risk $%.2f is over the $%.2f limit a trade" % (risk, lim["max_loss_per_trade"])
             elif cost > self.d.spendable(st, now) - held + 0.005:
                 why = "costs $%.2f and $%.2f of settled cash is free" % (cost, max(0.0, self.d.spendable(st, now) - held))
+            if not why:                                 # the move already failed: the buy would fill and stop out at once
+                px = acct.price(sym)
+                if px is not None and (px >= p["stop"] if short else px <= p["stop"]):
+                    why = "the price %.2f is already at or past the stop %.2f" % (px, p["stop"])
             if why:
                 book[sid] = {"state": "declined", "symbol": sym, "why": why, "at": now}
                 out["declined"] += 1

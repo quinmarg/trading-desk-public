@@ -227,6 +227,17 @@ class Server(DemoCase):
         code, body = self.call("/")
         self.assertIn(b"Trading Desk", body)
 
+    def test_chart_and_plan_routes(self):
+        code, body = self.call("/api/chart?symbol=AAPL&interval=5m")
+        self.assertEqual(code, 200, body)
+        d = json.loads(body)
+        self.assertTrue(d["bars"] and d["vwap"])
+        self.assertIn("Range high", [v["title"] for v in d["levels"]])
+        self.assertEqual(self.call("/api/chart?symbol=AAPL&interval=1m")[0], 400)     # the demo has 5-minute charts only
+        self.assertEqual(self.call("/api/chart?symbol=AAPL&interval=7m")[0], 400)
+        self.assertEqual(self.call("/api/plan", {})[0], 400)                           # no game plan in the demo
+        self.assertIn("game_plan", json.loads(self.call("/api/state")[1]))
+
     def test_guards(self):
         self.assertEqual(self.call("/api/skip", {"signal_id": 1}, headers={"Content-Type": "application/json"})[0], 403)
         self.assertEqual(self.call("/api/skip", {"signal_id": 1}, headers={"Content-Type": "text/plain", "X-Desk": "1"})[0], 403)
@@ -246,3 +257,45 @@ class Server(DemoCase):
         self.assertEqual(json.loads(body)["scan"]["hits"], 41)
         self.assertEqual(self.call("/api/settings", {"changes": {"max_trades_per_day": 4}})[0], 200)
         self.assertEqual(S.load()["max_trades_per_day"], 4)
+
+
+class SchedulerCalendar(DeskCase):
+    """The hourly Claude look and catalysts run only on days the market opens, and only until it closes."""
+
+    def sched(self, now, close):
+        d = mock.Mock()
+        d.src.demo, d.src.now.return_value = False, now
+        d.session_close.return_value = close
+        d.planning.return_value = False
+        d.j.get.return_value = None
+        d.scan.return_value = None
+        d.auto.tick.return_value = None
+        return d, Scheduler(d, log=lambda *_: None)
+
+    def test_nothing_hourly_on_a_market_holiday(self):
+        d, sch = self.sched("2026-11-26 10:00", None)               # Thanksgiving
+        sch.tick(wall=10000.0)
+        sch.last_catalysts = 0.0
+        sch.tick(wall=20000.0)
+        self.assertEqual(sch.last_plan_try, 0.0)
+        d.make_plan.assert_not_called()
+        d.find_catalysts.assert_not_called()
+
+    def test_game_plan_runs_on_an_early_close_morning_but_not_after_the_close(self):
+        d, sch = self.sched("2026-11-27 10:00", "13:00")
+        sch.tick(wall=10000.0)
+        self.assertEqual(sch.last_plan_try, 10000.0)                  # a look was started
+        d, sch = self.sched("2026-11-27 13:30", "13:00")
+        sch.tick(wall=10000.0)
+        sch.last_catalysts = 0.0
+        sch.tick(wall=20000.0)
+        self.assertEqual(sch.last_plan_try, 0.0)
+        d.find_catalysts.assert_not_called()
+
+    def test_session_close_reads_the_clock_once_a_day(self):
+        d = Desk(Journal(), Demo())
+        self.addCleanup(d.j.close)
+        self.assertIsNone(d.session_close("2026-11-26"))
+        self.assertEqual(d.session_close("2026-11-27"), "13:00")
+        self.assertEqual(d.session_close("2026-11-30"), "16:00")
+        self.assertIsNone(d.session_close("2026-11-28"))              # a Saturday

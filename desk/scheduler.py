@@ -4,8 +4,11 @@ import threading
 import time
 import traceback
 
+from . import analyst
 from . import settings as S
 
+CATALYSTS_EVERY = 3600   # seconds between catalyst gathers during the day (desk/catalysts.py)
+PLAN_RETRY = 900         # seconds before a failed or skipped game-plan look is tried again (desk/analyst.py)
 PAPER_EVERY = 30         # seconds between looks at the practice account's open orders
 
 
@@ -18,6 +21,8 @@ class Scheduler(threading.Thread):
         self.last_monitor = 0.0
         self.premarket_day = None
         self.last_paper = 0.0
+        self.last_catalysts = 0.0
+        self.last_plan_try = 0.0
         self.wake = threading.Event()
 
     def stop(self):
@@ -42,6 +47,23 @@ class Scheduler(threading.Thread):
             self.premarket_day = now[:10]
             self._safe("pre-market scan", self.desk.premarket)
             self._safe("congress", self.desk.congress)
+            self.last_catalysts = wall
+        # None on a weekend or an NYSE holiday (Thanksgiving...): no hourly catalysts and no game plan, never in demo
+        close = None if self.desk.src.demo else self.desk.session_close(now[:10])
+        # catalysts again each hour of the trading day, so news that breaks after 8:00 shows
+        if st["catalysts"] and close and "08:00" <= now[11:16] < close and wall - self.last_catalysts >= CATALYSTS_EVERY:
+            self.last_catalysts = wall
+            self._safe("catalysts", self.desk.find_catalysts)
+        # Claude's game plan: the morning plan once the day's list is picked, then a look each hour (in the background)
+        # (until 15:30, or the early close: no Claude look once the market has shut)
+        if st["analyst"] and close and self.premarket_day == now[:10] and "08:00" <= now[11:16] < min("15:30", close) \
+                and not self.desk.planning() and wall - self.last_plan_try >= PLAN_RETRY:
+            plan = self.desk.j.get("game_plan") or {}
+            made = plan.get("date") == now[:10] and plan.get("focus")
+            if not made or analyst.due(st, now, False, plan.get("at")):
+                self.last_plan_try = wall
+                threading.Thread(target=self._safe, args=("game plan", self.desk.make_plan), daemon=True,
+                                 name="desk-plan").start()
         # scan once per slot; in live a slot starts 25 seconds after each bar closes
         every = st["scan_every_seconds"]
         slot = "demo-" + now if self.desk.src.demo else int((wall - 25) // every)

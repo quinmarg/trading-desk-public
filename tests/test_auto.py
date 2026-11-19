@@ -66,7 +66,7 @@ class Trading(AutoBase):
         self.px["KO"] = q(59.70)
         self.tick()
         c = self.d.j.trade(t["id"])
-        self.assertEqual((c["exit_reason"], c["exit_price"]), ("stop", 59.7))
+        self.assertEqual((c["exit_reason"], c["exit_price"]), ("stop", 59.69))
 
     def test_flat_by_the_close_sells_at_the_market(self):
         t = self.filled()
@@ -74,7 +74,7 @@ class Trading(AutoBase):
         self.px["KO"] = q(60.40)
         self.tick()
         c = self.d.j.trade(t["id"])
-        self.assertEqual((c["status"], c["exit_reason"], c["exit_price"]), ("closed", "flat", 60.4))
+        self.assertEqual((c["status"], c["exit_reason"], c["exit_price"]), ("closed", "flat", 60.39))   # less the slippage guess
         self.assertEqual(self.d.paper.snapshot()["positions"], [])
 
     def test_a_buy_not_filled_in_time_is_cancelled(self):
@@ -93,6 +93,7 @@ class Trading(AutoBase):
 class SameLimitsAsYou(AutoBase):
     @mock.patch.object(S, "trades_cap", lambda st: st["max_trades_per_day"])   # live-mode cap; paper has none
     def test_trades_per_day_counting_its_own_waiting_buys(self):
+        S.update({"max_trades_per_day": 2})                                             # the default is no cap
         self.d.j.open_trade("T", 1, 12.0, 11.5, 13.0, self.d.src.now(), note="")      # one you took
         self.tick()                                                                     # KO: the second
         sid = self.add("F", qty=1, limit=12.0, stop=11.9, target=12.3, cost=12.0)
@@ -279,3 +280,45 @@ class ScanLog(DemoCase):
         with self.assertRaises(S.SettingsError):
             S.validate({"auto_paper": "yes"})
         self.assertEqual(json.loads(json.dumps(S.update({"auto_paper": True})))["auto_paper"], True)
+
+
+class EarlyClose(AutoBase):
+    """2026-11-27 closes at 1:00 PM: flat-by moves up to 12:55, or the trade would be held over the weekend."""
+
+    def test_day_flat_by_moves_up_with_an_early_close(self):
+        st = S.load()
+        self.assertEqual(self.d.day_flat_by(st, "2026-10-19 10:15"), "15:55")
+        self.assertEqual(self.d.day_flat_by(st, "2026-11-27 10:15"), "12:55")
+        self.assertEqual(self.d.day_flat_by(dict(st, flat_by="12:00"), "2026-11-27 10:15"), "09:35")   # never before the open
+
+    def test_auto_paper_sells_before_the_early_close_even_with_a_1555_slip(self):
+        self.d.src.set_now("2026-11-27 10:15")
+        sid = self.d.j.add_signal("2026-11-27", "KO", "orb", "ready", dict(SIG), self.d.src.now())
+        self.tick()
+        self.px["KO"] = q(60.10)
+        self.tick()
+        t = self.d.j.open_trades()[0]
+        self.assertEqual(t["signal_id"], sid)
+        self.d.src.set_now("2026-11-27 12:50")
+        self.px["KO"] = q(60.40)
+        self.tick()
+        self.assertEqual(self.d.j.trade(t["id"])["status"], "open")
+        self.d.src.set_now("2026-11-27 12:55")
+        self.tick()
+        c = self.d.j.trade(t["id"])
+        self.assertEqual((c["status"], c["exit_reason"]), ("closed", "flat"))
+
+
+class PriceAlreadyAtTheStop(AutoBase):
+    """A buy that fills at its stop is refused by the journal, so the round trip never reaches the record."""
+
+    def test_a_signal_whose_price_is_already_at_the_stop_is_left_alone(self):
+        self.px["KO"] = q(59.80)                                    # the slip's stop
+        out = self.tick()
+        self.assertEqual((out["placed"], out["declined"]), (0, 1))
+        self.assertIn("already at or past the stop", self.entry()["why"])
+        self.assertEqual(self.rows(), [])
+
+    def test_a_price_above_the_stop_still_trades(self):
+        self.px["KO"] = q(59.90)
+        self.assertEqual(self.tick()["placed"], 1)

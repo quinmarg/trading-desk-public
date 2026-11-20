@@ -169,14 +169,22 @@ ul.watchfor{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--text2)} 
 .below{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:0 16px;padding:8px 16px 40px;max-width:1600px}
 .cap .btn{white-space:nowrap;flex:none}
 .cap{display:flex;justify-content:space-between;align-items:center;gap:8px;color:var(--text2);font-size:13px;font-weight:550}
-.acct{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
-.acct div{background:var(--bg);padding:12px 16px}
+.acct{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+.acct > div{background:var(--bg);padding:12px 16px}
 .acct b{display:block;font:600 16px/1.2 var(--font)} .acct span{font-size:11.5px;color:var(--text2);white-space:nowrap}
-.acct div{padding:12px 12px}
+.acct > div{padding:12px 12px}
 .acct span{display:block;white-space:normal;margin-top:2px}
-.acct small{display:block;font-size:12px;margin-top:4px;color:var(--text2);white-space:nowrap}
-.acct small.pos{color:var(--go)} .acct small.neg{color:var(--stop)} .acct small.real{color:var(--warn);font-weight:600}
-.acct .sum{background:var(--panel)}
+.acct small{display:block;font-size:12px;margin-top:4px;color:var(--text2)} .acct small.real{color:var(--warn);font-weight:600}
+.m-head{padding:12px;background:var(--panel);border-bottom:1px solid var(--line)}
+.m-head small{display:block;font-size:12px;color:var(--text2);margin-top:4px}
+.m-head .lbl{font-size:12px;font-weight:600;color:var(--text2)}
+.m-pair{display:flex;gap:16px;flex-wrap:wrap;margin-top:4px}
+.m-pair div{min-width:0}
+.m-pair b{display:block;font:600 16px/1.2 var(--font)} .m-head .m-pair b{font-size:22px}
+.m-pair span{display:block;font-size:12px;color:var(--text2);margin-top:2px;white-space:nowrap}
+.m-models .m-name{font-size:12px;font-weight:600;color:var(--text);margin:0 0 4px}
+.m-models > div:last-child:nth-child(odd){grid-column:1 / -1}
+.m-small b{font-size:14px}
 .acct-note{margin:0;padding:6px 12px 8px;font-size:12px;color:var(--text3);border-bottom:1px solid var(--line)}
 .chip{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding:4px 8px;border-radius:5px;background:var(--warnBg);color:var(--warn);white-space:nowrap}
 .chip.live{background:var(--goBg);color:var(--go)}
@@ -398,8 +406,8 @@ footer{max-width:1180px;margin:0 auto;padding:4px 20px 32px;color:var(--text3);f
         </section>
 
         <aside class="pane right" aria-label="Plan and signals">
-          <div class="acct num" id="money" aria-label="Money in each model's account, today and since it started"></div>
-          <p class="acct-note">Combined SPY and Winter 3x update at their morning trade and after the close.</p>
+          <div class="money-strip num" id="money" aria-label="Made or lost by all models, then by each model, today and since it started"></div>
+          <p class="acct-note">Combined SPY and Winter 3x update at their morning trade and after the close. A model's balance is its account now.</p>
           <div class="pane-body">
             <span class="chip" id="mode-chip" hidden><i></i><span id="mode-text"></span></span>
             <div id="shorts-note"></div>
@@ -704,19 +712,24 @@ function greeting(now) {
   const h = Number(now.slice(11, 13));
   return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
-// the money strip: a box per model's account, the total, then what the breakout model can spend and risk (engine.money_table)
+// the money strip (engine.money_totals): all models first, made or lost today and since start; then a box per model,
+// whatever rows the desk sends (a 4th model shows and counts with no change here); then the breakout's limits
 function moneyCells(s) {
   const m = s.money;
   if (!m) return "";
-  const pn = (label, n) => `<small class="${n < 0 ? "neg" : n > 0 ? "pos" : ""}">${label} ${usd(n, true)}</small>`;
-  const box = (r, cls) => r.balance == null
-    ? `<div><b>–</b><span>${esc(r.name)}</span><small>Starts next trading day</small></div>`
-    : `<div${cls ? ` class="${cls}"` : ""}><b>${usd(r.balance)}</b><span>${esc(r.name)}</span>`
-      + (m.live && r.key ? `<small class="${r.real ? "real" : ""}">${r.real ? "Real money" : "Practice"}</small>` : "")
-      + pn("Today", r.today) + pn("Total", r.total) + `</div>`;
-  return m.rows.map(r => box(r)).join("") + box(m.total, "sum")
-    + `<div><b>${usd(s.account.spendable)}</b><span>Breakout can spend</span></div>`
-    + `<div><b>${usd(s.limits.max_loss_per_trade)}</b><span>Risk a trade</span></div>`;
+  const pn = n => `class="${n < 0 ? "neg" : n > 0 ? "pos" : ""}"`;
+  const pair = r => `<div class="m-pair"><div><b ${pn(r.today)}>${usd(r.today, true)}</b><span>today</span></div>`
+    + `<div><b ${pn(r.total)}>${usd(r.total, true)}</b><span>since start</span></div></div>`;
+  const t = m.total;
+  const head = `<div class="m-head"><div class="lbl">${esc(t.name)} (${t.models})</div>${pair(t)}`
+    + `<small>Balance ${usd(t.balance)}</small></div>`;
+  const box = r => `<div><div class="m-name">${esc(r.name)}</div>` + (r.balance == null
+    ? `<small>Starts next trading day</small>`
+    : pair(r) + `<small>Balance ${usd(r.balance)}</small>`
+      + (m.live ? `<small class="${r.real ? "real" : ""}">${r.real ? "Real money" : "Practice"}</small>` : "")) + `</div>`;
+  return head + `<div class="acct m-models">${m.rows.map(box).join("")}</div>`
+    + `<div class="acct m-small"><div><b>${usd(s.account.spendable)}</b><span>Breakout can spend</span></div>`
+    + `<div><b>${usd(s.limits.max_loss_per_trade)}</b><span>Risk a trade</span></div></div>`;
 }
 function render() {
   const s = S, a = s.account, L = s.limits, now = s.now;

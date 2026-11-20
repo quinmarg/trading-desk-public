@@ -52,3 +52,17 @@ class DeskCase(unittest.TestCase):
         lev = mock.patch.object(S, "PAPER_LEVERAGE", 1.0)        # and plain cash; test_settings.PaperBold covers 4x
         lev.start()
         self.addCleanup(lev.stop)
+        # Registered last, so it runs first: wait for any desk-combo / desk-winter3x thread a scheduler tick
+        # started, while this test's temp DESK_DATA and fake fetches are still in place. Without it a thread could
+        # outlive the test, fetch real prices and save into the real data/ folder (it reset models 2 and 3 on
+        # 2026-11-20 13:51 when the suite ran in the main checkout).
+        self.addCleanup(_join_desk_threads)
+
+
+def _join_desk_threads(timeout=10.0):
+    import threading
+    import time
+    end = time.time() + timeout
+    for t in threading.enumerate():
+        if t is not threading.current_thread() and t.name in ("desk-combo", "desk-winter3x"):
+            t.join(max(0.0, end - time.time()))

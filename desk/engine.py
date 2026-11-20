@@ -40,6 +40,16 @@ MAX_EVALS_PER_SCAN = 8
 CHART_READS_AT_ONCE = 4     # short-side charts read side by side: 40 take about 2.5 s instead of 16 or more (docs/SPEED.md)
 
 
+def money_totals(rows, live):
+    """The money strip's data: the model rows and one Total over every row given, so a model added to the rows (a fourth
+    model, say) is counted with no other change. A model with no balance yet adds $0."""
+    started = [r for r in rows if r["balance"] is not None]
+    total = {"name": "All models, real + practice" if live else "All models", "real": live, "models": len(rows),
+             "balance": round(sum(r["balance"] for r in started), 2),
+             "today": round(sum(r["today"] or 0 for r in rows), 2), "total": round(sum(r["total"] or 0 for r in rows), 2)}
+    return {"rows": rows, "total": total, "live": live}
+
+
 class DeskError(ValueError):
     pass
 
@@ -1012,11 +1022,7 @@ class Desk:
                      start=None if live else float(st["starting_balance"]))]
         rows += [dict(modelacct.money(k, today), key=k, name=n, real=False)
                  for k, n in (("combo", "Combined SPY"), ("winter3x", "Winter 3x"))]
-        started = [r for r in rows if r["balance"] is not None]
-        total = {"name": "Total, real + practice" if live else "Total", "real": live,
-                 "balance": round(sum(r["balance"] for r in started), 2),
-                 "today": round(sum(r["today"] for r in rows), 2), "total": round(sum(r["total"] for r in rows), 2)}
-        return {"rows": rows, "total": total, "live": live}
+        return money_totals(rows, live)
 
     CHART_RANGES = {"1m": ("1d", "1m"), "5m": ("5d", "5m"), "1d": ("1y", "1d")}
 

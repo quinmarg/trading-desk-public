@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.2.4 (2026-11-20)
+
+- **Money strip leads with made or lost.** An All models box first: made or
+  lost today and since the start, summed over every model running. Then a box
+  per model (Breakout + Claude, Combined SPY, Winter 3x) with its made today
+  and since start in large green or red type and its balance under them, then
+  small boxes with what the breakout model can spend and risk a trade
+  (`engine.money_totals`).
+- **Tests never write into your `data/` folder.** The test cleanup waits for
+  the model-book threads while the temporary data folder is still in place,
+  the clock tests no longer start the model books, and a guard test checks
+  that the scheduler tests leave `data/` untouched.
+
 ## 1.2.3 (2026-11-20)
 
 - **Money strip as boxes** on the Desk tab: one box per model's account

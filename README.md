@@ -293,14 +293,14 @@ Mac for it, `sudo pmset repeat wakeorpoweron MTWRF 07:45:00`.
 A TradingView-style workspace: today's list on the left with Claude's bias for each stock, the chart in the middle
 (1-minute, 5-minute or daily candles with VWAP, the 9 and 20 EMA, the premarket, prior-day and opening-range lines and
 the slip's entry, stop and target), and the plan, account and signals on the right. At the top of the right side a
-money strip has a box for each model's account (Breakout + Claude, Combined SPY, Winter 3x) with its balance in large
-type, today's made or lost and the total since it started, then a Total box and what the breakout model can spend and
-risk on a trade. In live mode the breakout row is your real account and the total says it mixes real and practice
-money; models 2 and 3 are always practice. Type any ticker in the list's box
-and press Enter to chart it. Chart settings and how to set up TradingView the same way:
-[docs/CHART-SETTINGS.md](docs/CHART-SETTINGS.md). The chart is TradingView's open-source Lightweight Charts and the
-fonts are Geist and Schibsted Grotesk, all stored in `desk/static/vendor` (licences there); nothing loads from the
-internet.
+money strip leads with **All models**: made or lost today and since the start, summed over every model running. Then a box
+per model (Breakout + Claude, Combined SPY, Winter 3x) with its made
+today and since start in large green or red type and its balance under them, then two small boxes with what the
+breakout model can spend and risk on a trade. In live mode the breakout row is your real account and the total
+says it mixes real and practice money; models 2 and 3 are always practice. Type any ticker in the list's box
+and press Enter to chart it. Chart settings and how to set up TradingView the same way: [docs/CHART-SETTINGS.md](docs/CHART-SETTINGS.md).
+The chart is TradingView's open-source Lightweight Charts and the fonts are Geist and Schibsted Grotesk, all stored in
+`desk/static/vendor` (licences there); nothing loads from the internet.
 
 ## The daily list, the watchlist agent, the graph and extra paper accounts
 

@@ -270,6 +270,12 @@ class SchedulerCalendar(DeskCase):
         d.j.get.return_value = None
         d.scan.return_value = None
         d.auto.tick.return_value = None
+        # these tests are about the clock: never start the model books' background threads (they write files)
+        from desk import scheduler as sch_mod
+        for book in (sch_mod.combo, sch_mod.winter3x):
+            p = mock.patch.object(book, "due", return_value=False)
+            p.start()
+            self.addCleanup(p.stop)
         return d, Scheduler(d, log=lambda *_: None)
 
     def test_a_sleep_during_entry_hours_is_logged_once(self):
@@ -345,3 +351,29 @@ class OneShareFloor(DeskCase):
     def test_no_floor_without_a_cut_today(self):
         s = self.snow(plan=False)
         self.assertEqual((s["status"], s["payload"]["qty"]), ("blocked", 0))
+
+
+class TestsLeaveNoData(DeskCase):
+    """The suite must never write into the repo's own data/ folder (on 2026-11-20 a model thread a scheduler test
+    started outlived the test and reset the real model accounts). Runs the scheduler tests and checks."""
+
+    def test_the_scheduler_tests_write_nothing_under_the_repo_data_folder(self):
+        import time
+        import unittest
+        from desk.paths import ROOT
+        real = ROOT / "data"
+        before = {p: p.stat().st_mtime for p in (real / "accounts").rglob("model.json")} if real.exists() else None
+        existed = real.exists()
+        loader = unittest.defaultTestLoader
+        suite = unittest.TestSuite([loader.loadTestsFromTestCase(SchedulerCalendar)]
+                                   + [loader.loadTestsFromName(n) for n in ("tests.test_combo", "tests.test_speed")])
+        res = unittest.TestResult()
+        suite.run(res)
+        self.assertTrue(res.wasSuccessful(), res.errors + res.failures)
+        time.sleep(0.5)                                   # a stray thread would have saved by now
+        if not existed:
+            self.assertFalse(real.exists(), "a test wrote into %s" % real)
+        else:                                            # the main checkout: your model accounts must be untouched
+            after = {p: p.stat().st_mtime for p in (real / "accounts").rglob("model.json")}
+            self.assertEqual({p: t for p, t in after.items() if p in before}, before)
+            self.assertEqual(set(after), set(before))

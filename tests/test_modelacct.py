@@ -126,7 +126,18 @@ class Account(DeskCase):
         self.assertTrue(m["live"])
         self.assertEqual([r["real"] for r in m["rows"]], [True, False, False])   # models 2 and 3 stay practice
         self.assertIsNone(m["rows"][0]["start"])                                  # live never guesses a balance
-        self.assertEqual(m["total"]["name"], "Total, real + practice")
+        self.assertEqual(m["total"]["name"], "All models, real + practice")
+
+    def test_a_fourth_model_row_is_shown_and_counted_in_the_total(self):
+        # a fourth model adds a row; the total must count it with no other change
+        from desk.engine import money_totals
+        m = Desk(Journal(), Demo()).state()["money"]
+        extra = dict(key="extra", name="Model 4", real=False, balance=412.5, today=3.25, total=12.5, start=400.0)
+        got = money_totals(m["rows"] + [extra], m["live"])
+        self.assertEqual(got["total"]["models"], 4)
+        self.assertEqual(got["total"]["today"], round(m["total"]["today"] + 3.25, 2))
+        self.assertEqual(got["total"]["total"], round(m["total"]["total"] + 12.5, 2))
+        self.assertEqual(got["total"]["balance"], round(m["total"]["balance"] + 412.5, 2))
 
     def test_a_models_today_is_the_last_day_against_the_day_before(self):
         rows = self.rows()

@@ -23,6 +23,7 @@ from . import exports
 from . import graph as G
 from . import health
 from . import mode as M
+from . import modelacct
 from . import notify
 from . import outcome
 from . import pipeline
@@ -646,7 +647,7 @@ class Desk:
             except charts.ChartError as e:
                 o = {"result": "no data", "entry": None, "exit": None, "exit_time": None, "r": None, "note": str(e)[:200]}
             else:
-                o = outcome.replay(p, bars)
+                o = (outcome.replay_ssr if p.get("ssr") else outcome.replay)(p, bars)   # Rule 201 shorts: above-bid fill
                 if spy == [] and p.get("side") != "short":
                     try:
                         spy = charts.session_bars(charts.intraday(self.src, "SPY") if self.src.demo
@@ -707,7 +708,7 @@ class Desk:
                 raise DeskError("A fill at %.2f is at or under the stop (%.2f). Check the number." % (price, p["stop"]))
             if price >= p["target"]:
                 raise DeskError("A fill at %.2f is at or over the target (%.2f). Check the number." % (price, p["target"]))
-            lim = S.limits(st, self.j.equity())
+            lim = S.limits(pipeline.own_risk(st, self.j, now[:10]) or st, self.j.equity())   # T3 one-share floor
             loss = round(qty * (price - p["stop"]), 2)
             if loss > lim["max_loss_per_trade"] + 0.005:
                 raise DeskError("At %.2f, %d shares risk $%.2f to the stop. Your limit is $%.2f. If it really filled there, "
@@ -729,7 +730,7 @@ class Desk:
             raise DeskError("A short fill at %.2f is at or over the stop (%.2f). Check the number." % (price, p["stop"]))
         if price <= p["target"]:
             raise DeskError("A short fill at %.2f is at or under the target (%.2f). Check the number." % (price, p["target"]))
-        lim = S.limits(st, self.j.equity())
+        lim = S.limits(pipeline.own_risk(st, self.j, now[:10]) or st, self.j.equity())       # T3 one-share floor
         loss = round(qty * (p["stop"] - price), 2)
         if loss > lim["max_loss_per_trade"] + 0.005:
             raise DeskError("At %.2f, %d shares risk $%.2f to the stop. Your limit is $%.2f. If it really filled there, "
@@ -992,10 +993,30 @@ class Desk:
             "stops": self.stops(st, now),
             "chart_urls": {},
         }
+        out["money"] = self.money_table(st, today, out)
         out["health"] = self.health(st, now, halt)
         out["chart_urls"] = exports.chart_urls(out)
         out["export_unknown"] = exports.tradingview_text(exports.todays_symbols(out))[1]
         return out
+
+    def money_table(self, st, today, out):
+        """The Desk's money table: one row per model's practice account and the total (desk/modelacct.py)."""
+        open_today = sum(t["unrealised"] or 0 for t in out["open_trades"] if t["date"] == today)
+        open_all = sum(t["unrealised"] or 0 for t in out["open_trades"])
+        live = st["mode"] == "live"
+        # in live mode model 1 is the real account (journal-live.db, which starts at $0 until you type your cash),
+        # so its start is unknown and "since start" is its closed trades; models 2 and 3 are always practice money
+        rows = [dict(key="main", name="Breakout + Claude", real=live, balance=round(out["account"]["equity"] + open_all, 2),
+                     today=round(out["day"]["realised"] + open_today, 2),
+                     total=round(out["stats"]["total_pnl"] + open_all, 2),
+                     start=None if live else float(st["starting_balance"]))]
+        rows += [dict(modelacct.money(k, today), key=k, name=n, real=False)
+                 for k, n in (("combo", "Combined SPY"), ("winter3x", "Winter 3x"))]
+        started = [r for r in rows if r["balance"] is not None]
+        total = {"name": "Total, real + practice" if live else "Total", "real": live,
+                 "balance": round(sum(r["balance"] for r in started), 2),
+                 "today": round(sum(r["today"] for r in rows), 2), "total": round(sum(r["total"] for r in rows), 2)}
+        return {"rows": rows, "total": total, "live": live}
 
     CHART_RANGES = {"1m": ("1d", "1m"), "5m": ("5d", "5m"), "1d": ("1y", "1d")}
 

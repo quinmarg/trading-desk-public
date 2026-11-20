@@ -322,3 +322,25 @@ class PriceAlreadyAtTheStop(AutoBase):
     def test_a_price_above_the_stop_still_trades(self):
         self.px["KO"] = q(59.90)
         self.assertEqual(self.tick()["placed"], 1)
+
+
+class OneShareFloorIsTaken(AutoBase):
+    """docs/IMPROVE-2026-11-20.md T3: a one-share-floor slip risks more than Claude's day cut but no more than your own
+    risk, and auto paper takes it; without a cut today the same kind of slip is left alone."""
+
+    def big(self, sym):
+        self.px[sym] = q(121.0)
+        return self.add(sym, qty=1, limit=120.0, stop=110.0, target=140.0, cost=120.0)   # one share risks $10
+
+    def test_left_alone_at_the_cut_and_taken_at_your_own_risk(self):
+        self.px["KO"] = q(59.0)                                             # KO's own slip is past its stop: no cash held
+        eq = self.d.j.equity()
+        S.update({"risk_per_trade_pct": round(100 * 8.0 / eq, 2)})          # the day's cut: about $8 a trade
+        a = self.big("NVDA")
+        self.tick()
+        self.assertEqual(self.entry(a)["state"], "declined")
+        self.assertIn("over the $8.00 limit", self.entry(a)["why"])
+        self.d.j.put("plan_settings", {"date": "2026-10-19", "base": {"risk_per_trade_pct": round(100 * 16.0 / eq, 2)}})
+        b = self.big("AMD")
+        self.tick()
+        self.assertEqual(self.entry(b)["state"], "working")

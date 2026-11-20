@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.3 (2026-11-20)
+
+- **Money strip as boxes** on the Desk tab: one box per model's account
+  (Breakout + Claude, Combined SPY, Winter 3x) with its balance, today's made or
+  lost and the total since it started, then a Total box, what the breakout
+  model can spend and its risk a trade. The breakout balance counts open trades
+  at their last price. In live mode the breakout row is marked real money.
+- **Model 1, paper mode, from declared tests** (`docs/IMPROVE-2026-11-20.md`,
+  fresh free data, 88 stocks, 45 sessions):
+  - a short under SEC Rule 201 gets a sell-short limit a cent above the trigger
+    instead of a block (T2 passed: +0.07R on 108 modelled fills); live mode
+    still blocks it, and replays of restricted shorts use the above-bid fill;
+  - a one-share floor when Claude's day cut to risk leaves 0 shares (T3);
+    auto paper and recorded fills check it against your own risk;
+  - the review has a RULE 201 SHORTS section;
+  - not changed: the in-play screen, weak signals for auto paper and a longer
+    signal window (T1, T5, T4 failed).
+- **The backtest** can model restricted shorts and now also leaves out the
+  "down 10 % yesterday" case, as the desk does.
+- **A health event when the desk did not run during entry hours**, for
+  example while the Mac slept.
+- `research/improve_2026_11_20.py` and its results (backtest statistics only).
+
 ## 1.2.2 (2026-11-19)
 
 - **Each model has its own practice account.** Model 1 (opening-range breakout

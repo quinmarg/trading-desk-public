@@ -1,4 +1,5 @@
 import unittest
+import unittest.mock
 
 from desk import backtest as B
 from desk import outcome
@@ -85,3 +86,48 @@ class Scoring(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Rule201Fill(unittest.TestCase):
+    """SEC Rule 201: a restricted short rests a cent over the trigger close and fills only when a bar trades through it
+    (docs/IMPROVE-2026-11-20.md, T2)."""
+
+    def plan(self):
+        D = day([(100, 101, 99, 100)] * 3 + [(100, 100, 98.4, 98.5)] + [(98.5, 98.5, 97, 97.2)] * 3)
+        p = B.plan_day(D, "short", B.DEFAULT_RULE)
+        return D, p
+
+    def test_a_falling_stock_never_lifts_the_limit_so_there_is_no_fill(self):
+        D, p = self.plan()
+        self.assertEqual(outcome.ssr_limit(p["entry"]), 98.51)
+        self.assertEqual(outcome.replay_ssr(p, D)["result"], outcome.NO_FILL)
+        self.assertNotEqual(outcome.replay(p, D)["result"], outcome.NO_FILL)   # the plain short would have filled
+
+    def test_a_bounce_through_the_limit_fills_at_the_limit_never_better(self):
+        D, p = self.plan()
+        D[4].update(o=98.5, h=99.0, l=98.3, c=98.4)           # buyers lift it: the bar trades 98.52 or more
+        for b in D[5:]:
+            b.update(o=97, h=97.5, l=95, c=95.2)
+        r = outcome.replay_ssr(p, D)
+        self.assertEqual(r["entry"], 98.51)
+        self.assertEqual(r["result"], outcome.TARGET)          # target 2R under the plan's entry
+        self.assertAlmostEqual(r["r"], (98.51 - r["exit"]) / (p["stop"] - 98.51), places=2)
+
+    def test_a_bar_touching_the_limit_without_trading_through_does_not_fill(self):
+        D, p = self.plan()
+        D[4].update(o=98.5, h=98.51, l=98.3, c=98.4)
+        self.assertEqual(outcome.replay_ssr(p, D)["result"], outcome.NO_FILL)
+
+    def test_the_backtest_leaves_restricted_shorts_out_unless_asked_and_marks_them(self):
+        daily = [{"date": "2026-%02d-%02d" % (1 + i // 28, 1 + i % 28), "o": 130, "h": 131, "l": 129, "c": 130}
+                 for i in range(250)]                        # 200-day average about 130: the short is under it
+        daily[-1].update(l=105.0, c=100.0)                    # down 19 % yesterday: restricted today too
+        one = [(100, 101, 99, 100)] * 3 + [(100, 100, 98.4, 98.5), (98.5, 99.0, 98.3, 98.4)] + [(97, 97.5, 95, 95.2)] * 3
+        days = [("2026-10-%02d" % (2 + i), day(one, "2026-10-%02d" % (2 + i))) for i in range(B.FEATURE_DAYS + 1)]
+        data = {"intraday": None, "daily": {"bars": daily}}
+        with unittest.mock.patch.object(B, "sessions", return_value=days):
+            plain = B.signals("X", data, replays=0)
+            kept = B.signals("X", data, replays=0, ssr_model=True)
+        self.assertFalse([r for r in plain if r["side"] == "short"])
+        shorts = [r for r in kept if r["side"] == "short"]
+        self.assertEqual([(r["ssr"], r["entry"]) for r in shorts], [("yesterday", 98.51)])

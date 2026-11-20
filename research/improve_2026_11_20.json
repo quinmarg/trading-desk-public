@@ -1,0 +1,211 @@
+{
+ "pool": {
+  "T1 long in play": {
+   "n": 267,
+   "avg": 0.106,
+   "pf": 1.25,
+   "total": 28.3,
+   "lo": -0.159,
+   "hi": 0.375,
+   "days": 44,
+   "win": 45.7
+  },
+  "T1/T5 long not in play": {
+   "n": 1696,
+   "avg": -0.198,
+   "pf": 0.68,
+   "total": -336.6,
+   "lo": -0.339,
+   "hi": -0.051,
+   "days": 45,
+   "win": 35.8
+  },
+  "T1 short in play": {
+   "n": 146,
+   "avg": 0.041,
+   "pf": 1.09,
+   "total": 5.9,
+   "lo": -0.261,
+   "hi": 0.301,
+   "days": 39,
+   "win": 49.3
+  },
+  "T1/T5 short not in play": {
+   "n": 1187,
+   "avg": -0.04,
+   "pf": 0.92,
+   "total": -47.2,
+   "lo": -0.251,
+   "hi": 0.184,
+   "days": 45,
+   "win": 43.4
+  },
+  "T2 ssr shorts, all": {
+   "n": 108,
+   "avg": 0.071,
+   "pf": 1.16,
+   "total": 7.7,
+   "lo": -0.405,
+   "hi": 0.509,
+   "days": 18,
+   "win": 50.0
+  },
+  "T2 ssr shorts, in play": {
+   "n": 46,
+   "avg": -0.16,
+   "pf": 0.69,
+   "total": -7.4,
+   "lo": -0.586,
+   "hi": 0.324,
+   "days": 11,
+   "win": 43.5
+  },
+  "T2 ssr shorts, today trigger": {
+   "n": 32,
+   "avg": -0.023,
+   "pf": 0.95,
+   "total": -0.8,
+   "lo": -0.544,
+   "hi": 0.518,
+   "days": 11,
+   "win": 46.9
+  },
+  "T2 ssr shorts, yesterday trigger": {
+   "n": 76,
+   "avg": 0.111,
+   "pf": 1.25,
+   "total": 8.5,
+   "lo": -0.389,
+   "hi": 0.636,
+   "days": 14,
+   "win": 51.3
+  },
+  "T2 ssr shorts, signals (filled or not)": {
+   "n": 108
+  },
+  "T4 extra fills with 20 min, all": {
+   "n": 4,
+   "avg": 0.118,
+   "pf": 1.17,
+   "total": 0.5,
+   "lo": -1.372,
+   "hi": 1.609,
+   "days": 4,
+   "win": 50.0
+  },
+  "T4 extra fills with 20 min, in play": {
+   "n": 0
+  },
+  "B0 paper rule (in play, no ssr)": {
+   "n": 413,
+   "avg": 0.083,
+   "pf": 1.19,
+   "total": 34.2,
+   "lo": -0.105,
+   "hi": 0.27,
+   "days": 45,
+   "win": 47.0
+  }
+ },
+ "desk": {
+  "T1 long in play": {
+   "n": 43,
+   "avg": -0.047,
+   "pf": 0.9,
+   "total": -2.0,
+   "lo": -0.339,
+   "hi": 0.23,
+   "days": 25,
+   "win": 44.2
+  },
+  "T1/T5 long not in play": {
+   "n": 239,
+   "avg": -0.093,
+   "pf": 0.83,
+   "total": -22.3,
+   "lo": -0.263,
+   "hi": 0.084,
+   "days": 44,
+   "win": 38.5
+  },
+  "T1 short in play": {
+   "n": 20,
+   "avg": -0.1,
+   "pf": 0.81,
+   "total": -2.0,
+   "lo": -0.592,
+   "hi": 0.312,
+   "days": 14,
+   "win": 35.0
+  },
+  "T1/T5 short not in play": {
+   "n": 130,
+   "avg": -0.049,
+   "pf": 0.91,
+   "total": -6.4,
+   "lo": -0.301,
+   "hi": 0.202,
+   "days": 44,
+   "win": 42.3
+  },
+  "T2 ssr shorts, all": {
+   "n": 22,
+   "avg": 0.465,
+   "pf": 2.9,
+   "total": 10.2,
+   "lo": -0.107,
+   "hi": 0.925,
+   "days": 10,
+   "win": 63.6
+  },
+  "T2 ssr shorts, in play": {
+   "n": 11,
+   "avg": 0.433,
+   "pf": 2.68,
+   "total": 4.8,
+   "lo": -0.378,
+   "hi": 1.009,
+   "days": 7,
+   "win": 63.6
+  },
+  "T2 ssr shorts, today trigger": {
+   "n": 8,
+   "avg": 1.0,
+   "pf": 12.89,
+   "total": 8.0,
+   "lo": -0.013,
+   "hi": 1.403,
+   "days": 4,
+   "win": 75.0
+  },
+  "T2 ssr shorts, yesterday trigger": {
+   "n": 14,
+   "avg": 0.159,
+   "pf": 1.47,
+   "total": 2.2,
+   "lo": -0.422,
+   "hi": 0.631,
+   "days": 6,
+   "win": 57.1
+  },
+  "T2 ssr shorts, signals (filled or not)": {
+   "n": 22
+  },
+  "T4 extra fills with 20 min, all": {
+   "n": 0
+  },
+  "T4 extra fills with 20 min, in play": {
+   "n": 0
+  },
+  "B0 paper rule (in play, no ssr)": {
+   "n": 63,
+   "avg": -0.064,
+   "pf": 0.87,
+   "total": -4.0,
+   "lo": -0.326,
+   "hi": 0.206,
+   "days": 27,
+   "win": 41.3
+  }
+ }
+}

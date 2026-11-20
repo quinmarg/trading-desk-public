@@ -170,7 +170,7 @@ Paste into the analyst's system prompt. Each line: rule, then (strength). "Stron
 14. Do not plan entries in the first 5 minutes or after 15:30; plan to be flat by 15:55. (some: papers exit at the close; the desk's rule)
 15. Prefer "hold to the close" over a fixed 2R target in the plan text for strong catalyst days; say a quick target is likely to be hit rarely. (some: desk test, +0.19R vs about 0R on 41 sessions)
 16. Flag low-float, under-$5 names, and halt-prone moves as "avoid": a stop does not fill during a trading pause. (some: LULD rules; FINRA warnings)
-17. Flag a stock that is down 10 %+ from the prior close: no short plan (SEC Rule 201). (strong: rule)
+17. A stock down 10 %+ from the prior close (or yesterday) is under SEC Rule 201: a short may only fill above the bid. In paper mode the desk shorts it with a limit a cent over the trigger, which fills only on a bounce; do not call 'avoid' for that alone. In live mode the desk does not short it. (strong: rule; desk backtest 2026-11-20: +0.07R on 108 modelled fills, in-play ones −0.16R on 46, wide ranges)
 18. After a narrow-range prior day (the narrowest of the last 4 or 7 days), raise the chance of expansion; note it. (weak: Crabel, untested here)
 19. On a day when SPY has no direction and the stock's opening range is very wide relative to ATR, call "avoid": stop distance and slippage eat the edge. (weak)
 20. Always state costs: breakeven requires the move to beat about $0.01 a share plus slippage; say if the stop is under 0.3 % of price. (strong: costs erase thin edges, both replications)

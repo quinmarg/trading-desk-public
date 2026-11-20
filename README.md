@@ -63,7 +63,9 @@ The demo keeps its data in `data-demo/`, apart from your real record in
 1. At 8:00 the desk picks today's stocks to scan (paper mode), lists daily-chart setups to watch, and Claude
    writes the game plan (if the `claude` command is set up).
 2. From 9:45 AM to 3:30 PM New York time it scans 25 seconds after every 5-minute candle
-   closes. A ready slip and its phone alert usually follow 5 to 15 seconds later (`docs/SPEED.md`).
+   closes. **The Mac has to be awake**: if it sleeps (a closed lid on battery, for example) the desk sees none of
+   those breakouts, and the event log says when that happened. A ready slip and its phone alert usually follow 5 to 15
+   seconds later (`docs/SPEED.md`).
 3. A breakout that fits your account becomes a slip:
    *Buy 3 W at 110.77 or lower. Stop 108.91. Target 113.56. Good until 10:25.*
 4. If you want it, enter it at your broker as a bracket order (a buy with a
@@ -246,6 +248,8 @@ Without it the desk trades on without a plan; turn it off in Settings (`analyst`
 - **Settings for the day (paper mode)**: the plan writes today's stocks into Settings' watchlist and may set the
   directions, lower risk per trade to between half of yours and yours, and move the last entry earlier, with a reason
   in the log. Each morning starts from your own settings again; a setting you changed yourself stays yours.
+  If the lower risk leaves a trade at 0 shares, the desk sizes it at your own risk instead, which is always one share
+  and never more than your own setting.
 - **Signals**: each slip shows what the plan said. In paper mode a ready signal the plan argues against (avoid, or the
   other side at conviction 3+) is graded weak (`plan_filter`: paper, on or off). The review's "CLAUDE'S GAME PLAN"
   section compares signals with and against the plan, so the research has to earn its place.
@@ -288,7 +292,11 @@ Mac for it, `sudo pmset repeat wakeorpoweron MTWRF 07:45:00`.
 
 A TradingView-style workspace: today's list on the left with Claude's bias for each stock, the chart in the middle
 (1-minute, 5-minute or daily candles with VWAP, the 9 and 20 EMA, the premarket, prior-day and opening-range lines and
-the slip's entry, stop and target), and the plan, account and signals on the right. Type any ticker in the list's box
+the slip's entry, stop and target), and the plan, account and signals on the right. At the top of the right side a
+money strip has a box for each model's account (Breakout + Claude, Combined SPY, Winter 3x) with its balance in large
+type, today's made or lost and the total since it started, then a Total box and what the breakout model can spend and
+risk on a trade. In live mode the breakout row is your real account and the total says it mixes real and practice
+money; models 2 and 3 are always practice. Type any ticker in the list's box
 and press Enter to chart it. Chart settings and how to set up TradingView the same way:
 [docs/CHART-SETTINGS.md](docs/CHART-SETTINGS.md). The chart is TradingView's open-source Lightweight Charts and the
 fonts are Geist and Schibsted Grotesk, all stored in `desk/static/vendor` (licences there); nothing loads from the
@@ -398,8 +406,11 @@ and is marked **SHORT** in red.
 - The loss on a short is not capped, shares may not be available to borrow,
   and a short-sale restriction applies after a 10 % drop. The dashboard says
   so on the Desk tab, on every short slip and in Settings.
-- The desk blocks a short when the stock is already down 10 % on the day, or
-  is above its 200-day average, and wants the short's full value in settled
+- Under SEC Rule 201 (down 10 % today, or yesterday) a short may only fill
+  above the best bid. In paper mode the slip then rests its sell-short limit a
+  cent over the trigger close, so it fills only if the price bounces back up
+  to it (docs/IMPROVE-2026-11-20.md); in live mode the desk blocks it. The desk
+  also blocks a short when the stock is above its 200-day average, and wants the short's full value in settled
   cash. Shorts are closed by the flat-by time, never held overnight.
 - Four of the skills are long-only, so the short maths is the desk's own code
   in `desk/shorts.py`. No real short order has been placed from a slip: treat

@@ -105,6 +105,38 @@ class Account(DeskCase):
         a = winter3x.load()["account"]
         self.assertEqual([p["total"] for p in w["points"]], [round(c["equity"] - 400.0, 2) for c in a["curve"]])
 
+    def test_the_desk_money_table_has_every_model_and_the_total(self):
+        rows = self.rows()
+        combo.run("2026-04-29 09:40", data=(rows[:201], {}, (101.0, "2026-04-29 09:40")))
+        combo.run("2026-05-05 09:40", data=(rows, {}, (95.0, "2026-05-05 09:40")))
+        m = Desk(Journal(), Demo()).state()["money"]
+        got = {r["key"]: r for r in m["rows"]}
+        self.assertEqual([r["name"] for r in m["rows"]], ["Breakout + Claude", "Combined SPY", "Winter 3x"])
+        a = combo.load()["account"]
+        self.assertEqual(got["combo"]["balance"], a["equity"])
+        self.assertEqual(got["combo"]["total"], round(a["equity"] - 400.0, 2))
+        self.assertIsNone(got["winter3x"]["balance"])           # not started: no balance, nothing made
+        self.assertEqual(m["total"]["balance"], round(got["main"]["balance"] + a["equity"], 2))
+        self.assertEqual(m["total"]["total"], round(got["main"]["total"] + got["combo"]["total"], 2))
+
+    def test_in_live_mode_the_breakout_row_is_real_money_and_the_total_says_so(self):
+        d = Desk(Journal(), Demo())
+        d.set_mode("live", "LIVE")
+        m = d.state()["money"]
+        self.assertTrue(m["live"])
+        self.assertEqual([r["real"] for r in m["rows"]], [True, False, False])   # models 2 and 3 stay practice
+        self.assertIsNone(m["rows"][0]["start"])                                  # live never guesses a balance
+        self.assertEqual(m["total"]["name"], "Total, real + practice")
+
+    def test_a_models_today_is_the_last_day_against_the_day_before(self):
+        rows = self.rows()
+        combo.run("2026-04-29 09:40", data=(rows[:201], {}, (101.0, "2026-04-29 09:40")))
+        combo.run("2026-05-05 09:40", data=(rows, {}, (95.0, "2026-05-05 09:40")))
+        c = combo.load()["account"]["curve"]
+        got = modelacct.money("combo", c[-1]["date"])
+        self.assertEqual(got["today"], round(c[-1]["equity"] - c[-2]["equity"], 2))
+        self.assertEqual(modelacct.money("combo", "2099-01-02")["today"], 0.0)   # no row for that day: nothing today
+
     def test_the_model_account_names_are_reserved(self):
         for name in ("combo", "winter3x"):
             self.assertIn("model accounts", main.open_account(argparse.Namespace(account=name, tickers=None, demo=False)))

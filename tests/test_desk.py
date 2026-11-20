@@ -272,6 +272,25 @@ class SchedulerCalendar(DeskCase):
         d.auto.tick.return_value = None
         return d, Scheduler(d, log=lambda *_: None)
 
+    def test_a_sleep_during_entry_hours_is_logged_once(self):
+        d, sch = self.sched("2026-11-20 09:30", "16:00")
+        with mock.patch.object(S, "load", return_value=dict(S.load(), no_entries_before="09:45", no_entries_after="14:30")):
+            sch.tick(wall=10000.0)
+            d.src.now.return_value = "2026-11-20 10:17"
+            sch.tick(wall=10000.0 + 47 * 60)
+            d.src.now.return_value = "2026-11-20 10:18"
+            sch.tick(wall=10000.0 + 48 * 60)                          # a normal pass: nothing more
+        gaps = [c for c in d.j.add_event.call_args_list if c.args[0] == "health"]
+        self.assertEqual(len(gaps), 1)
+        self.assertIn("from 09:45 to 10:17", gaps[0].args[1])
+
+    def test_a_pause_before_the_entry_window_is_not_logged(self):
+        d, sch = self.sched("2026-11-20 08:15", "16:00")
+        sch.tick(wall=10000.0)
+        d.src.now.return_value = "2026-11-20 09:30"
+        sch.tick(wall=10000.0 + 75 * 60)
+        self.assertFalse([c for c in d.j.add_event.call_args_list if c.args[0] == "health"])
+
     def test_nothing_hourly_on_a_market_holiday(self):
         d, sch = self.sched("2026-11-26 10:00", None)               # Thanksgiving
         sch.tick(wall=10000.0)
@@ -299,3 +318,30 @@ class SchedulerCalendar(DeskCase):
         self.assertEqual(d.session_close("2026-11-27"), "13:00")
         self.assertEqual(d.session_close("2026-11-30"), "16:00")
         self.assertIsNone(d.session_close("2026-11-28"))              # a Saturday
+
+
+class OneShareFloor(DeskCase):
+    """Paper mode, docs/IMPROVE-2026-11-20.md T3: when Claude's day cut to risk_per_trade_pct leaves 0 shares, the trade
+    is sized again at your own percentage (one share), never above it."""
+
+    def snow(self, mode="paper", plan=True):
+        S.save({"starting_balance": 400, "risk_per_trade_pct": 1.0, "mode": mode})
+        d = Desk(Journal(), Demo("2026-10-19 10:15"))
+        if plan:
+            d.j.put("plan_settings", {"date": "2026-10-19", "base": {"risk_per_trade_pct": 2.0},
+                                      "set": {"risk_per_trade_pct": 1.0}})
+        d.scan()
+        return [x for x in d.j.signals() if x["symbol"] == "SNOW"][0]
+
+    def test_the_cut_alone_never_blocks_a_trade_in_paper(self):
+        s = self.snow()
+        p = s["payload"]
+        self.assertEqual(p["qty"], 1)
+        self.assertLessEqual(p["max_loss"], 8.0)                  # your own 2 % of $400
+        self.assertGreater(p["max_loss"], 4.0)                    # over the day's cut: that is why it needed the floor
+        self.assertIn("One share", " ".join(p["warnings"]))
+        self.assertNotEqual(s["status"], "blocked")
+
+    def test_no_floor_without_a_cut_today(self):
+        s = self.snow(plan=False)
+        self.assertEqual((s["status"], s["payload"]["qty"]), ("blocked", 0))

@@ -170,11 +170,12 @@ def nr7(prev):
     return rng[-1] <= min(rng)
 
 
-def signals(symbol, data, rule=None, replays=2000, tm=None, spy=None):
+def signals(symbol, data, rule=None, replays=2000, tm=None, spy=None, ssr_model=False):
     """Every signal the rule makes on this stock's 60 days, with the replay, the odds and the screen measures.
     spy: {date: 78 SPY bars} adds the playbook's market fields (docs/MODELS.md). Long slips the real limit never
     filled are kept too, marked filled=False, so the shadow entry arms (outcome.shadow) can be compared on every
-    slip; score() leaves them out."""
+    slip; score() leaves them out. ssr_model: keep shorts under SEC Rule 201 (marked ssr) and replay them with
+    outcome.replay_ssr's above-the-bid limit instead of leaving them out, as the desk does."""
     rule = dict(DEFAULT_RULE, **(rule or {}))
     tm = tm or _tm()
     days = sessions(data["intraday"])
@@ -203,14 +204,18 @@ def signals(symbol, data, rule=None, replays=2000, tm=None, spy=None):
             p = plan_day(D, side, r)
             if not p or p.get("blocked"):
                 continue
+            ssr = None
             if side == "short":
                 low_so_far = min(b["l"] for b in D[:p["k"] + 1])
-                if low_so_far <= prev_close * 0.9:
-                    continue                        # the desk blocks a short once the stock is down 10 % (SSR)
+                # SEC Rule 201, both triggers the desk checks: down 10 % today, or down 10 % yesterday
+                ssr = "today" if low_so_far <= prev_close * 0.9 else \
+                    "yesterday" if len(prev) >= 2 and prev[-1]["l"] <= prev[-2]["c"] * 0.9 else None
+                if ssr and not ssr_model:
+                    continue                        # the desk blocks a restricted short
                 avg = sma_before(daily, date)
                 if avg is None or p["entry"] >= avg:
                     continue                        # the desk only shorts under the 200-day average
-            res = outcome.replay(p, D)
+            res = outcome.replay_ssr(p, D) if ssr else outcome.replay(p, D)
             arms = outcome.shadow(dict(p, opening_range={"high": p["or_high"]}), D) if side == "long" else {}
             filled = res["result"] not in (outcome.NO_FILL, outcome.NO_PLAN)
             if not filled and not arms:
@@ -221,7 +226,7 @@ def signals(symbol, data, rule=None, replays=2000, tm=None, spy=None):
                    "r_vwap": (arms.get("vwap") or {}).get("r_orig"), "r_retest": (arms.get("retest") or {}).get("r_orig"),
                    "plan_risk": round(p["limit"] - p["stop"], 4) if side == "long" else None, "filled": filled}
             risk = abs(res["entry"] - p["stop"]) if filled else p["risk"]
-            out.append(dict(feats, symbol=symbol, date=date, side=side, result=res["result"], r=res["r"],
+            out.append(dict(feats, symbol=symbol, date=date, side=side, ssr=ssr, result=res["result"], r=res["r"],
                             risk=round(risk, 2), entry=res["entry"] if filled else p["entry"], bar=p["k"], **mkt,
                             odds=odds(tm, days[:i], p, rule["flat_by"], replays) if replays and filled else None))
     return out

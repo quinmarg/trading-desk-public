@@ -407,13 +407,37 @@ class DeskShorts(DeskCase):
         self.assertAlmostEqual(o["p_target"] + o["p_stop"] + o["p_neither"], 1.0, places=3)
         self.assertGreater(o["history"]["triggered"], 0)
 
-    def test_a_ten_percent_drop_blocks_the_short(self):
-        d = self.desk(starting_balance=2000)
+    def test_a_ten_percent_drop_shorts_above_the_bid_in_paper_and_blocks_in_live(self):
+        # SEC Rule 201 lets a short fill above the national best bid (docs/IMPROVE-2026-11-20.md, T2)
+        for mode in ("paper", "live"):
+            d = self.desk(starting_balance=2000, mode=mode)
+            chart = self.tsla(bar("10:10", 362.2, 362.3, 361.2, 361.5))
+            chart["prev_close"] = 402.0                         # today's low 361.2 is more than 10 % under it
+            status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
+            self.assertEqual(sig["ssr"], "today")
+            if mode == "paper":
+                self.assertNotEqual(status, "blocked", sig["problems"])
+                self.assertEqual(sig["limit"], 361.51)          # a cent over the trigger close, not 0.2R under it
+                self.assertFalse([p for p in sig["problems"] if "restriction" in p])
+                self.assertIn("bounces back up", " ".join(sig["warnings"]))
+                self.assertEqual(sig["max_loss"], round(sig["qty"] * (sig["stop"] - 361.51), 2))
+            else:
+                self.assertEqual(status, "blocked")
+                self.assertIn("Short-sale restriction", sig["problems"][0])
+
+    def test_a_short_the_days_risk_cut_leaves_at_zero_shares_gets_one_share_in_paper(self):
+        # T3: one share risks $3.00 at the limit; the cut allows $2.40 (0.12 % of $2,000), your own 0.2 % allows $4.00
+        d = self.desk(starting_balance=2000, risk_per_trade_pct=0.12, min_edge_points=-100)
         chart = self.tsla(bar("10:10", 362.2, 362.3, 361.2, 361.5))
-        chart["prev_close"] = 402.0                             # today's low 361.2 is more than 10 % under it
         status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
-        self.assertEqual(status, "blocked")
-        self.assertIn("Short-sale restriction", sig["problems"][0])
+        self.assertEqual(sig["qty"], 0)                           # no plan settings today: the cut stands
+        d.j.put("plan_settings", {"date": "2026-10-19", "base": {"risk_per_trade_pct": 0.2}})
+        status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
+        self.assertEqual((sig["qty"], sig["max_loss"]), (1, 3.0))
+        self.assertIn("One share", " ".join(sig["warnings"]))
+        S.update({"mode": "live"})                                # live mode keeps your own settings: no floor
+        status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
+        self.assertEqual(sig["qty"], 0)
 
     def test_no_breakdown_is_not_a_signal_and_an_old_one_is_missed(self):
         d = self.desk(starting_balance=2000)
@@ -453,6 +477,10 @@ class DeskShorts(DeskCase):
         hist = days([400.0] * 249)
         hist[-1]["l"] = 355.0                                    # yesterday: down 11% intraday from 400
         charts.daily_bars = lambda source, symbol: hist
+        status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
+        self.assertEqual((sig["ssr"], sig["limit"]), ("yesterday", 361.51))   # paper: the above-bid limit
+        self.assertIn("runs through today", " ".join(sig["warnings"]))
+        S.update({"mode": "live"})
         status, sig = pipeline.evaluate_short("TSLA", S.load(), d.j, d.src, chart=chart)
         self.assertEqual(status, "blocked")
         self.assertIn("runs through today", " ".join(sig["problems"]))

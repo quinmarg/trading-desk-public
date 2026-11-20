@@ -98,6 +98,30 @@ def _replay_short(limit, stop, target, start, until, flat, bars):
     return done(OPEN, last["c"], last, "The candles end before the trade did.")
 
 
+def ssr_limit(entry):
+    """The sell-short limit under SEC Rule 201 (docs/IMPROVE-2026-11-20.md, T2): one cent over the trigger close, so the
+    order rests above the bid, as the rule requires once a stock is down 10 %."""
+    return round(float(entry) + 0.01, 2)
+
+
+def replay_ssr(p, bars):
+    """A short under the short-sale restriction, declared before testing: a sell limit one cent over the trigger close
+    rests from the trigger candle's close until the window ends. Resting above the bid, it fills only when buyers lift
+    it, so a 5-minute bar must trade a cent through it (limit + $0.01); it fills at the limit, never better. Same stop
+    and target as the slip. Same return as replay()."""
+    try:
+        lim = ssr_limit(p["entry"])
+        q = dict(p, side="short", limit=lim + 0.01)
+        r = replay(q, bars)
+    except (KeyError, TypeError, ValueError):
+        return replay({}, bars)
+    if r["entry"] is None:
+        return dict(r, note="Rule 201: the price never came back up through %.2f while the signal was good." % lim)
+    risk = float(p["stop"]) - lim
+    return dict(r, entry=lim, r=round((lim - r["exit"]) / risk, 2) if risk > 0 else None,
+                note="Rule 201 limit %.2f. %s" % (lim, r["note"]))
+
+
 # ---- shadow entry arms (logging only; docs/MODELS.md) -----------------
 # The same long slip, same stop and target, with the buy limit moved to a pullback level. Declared before any data
 # was seen: two arms, a 60-minute resting window from the trigger candle's close, never above the real limit.

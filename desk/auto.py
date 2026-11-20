@@ -18,6 +18,7 @@ trades; the ones already running are finished by these same rules.
 """
 from . import orders as O
 from . import paper as P
+from . import pipeline as P_
 from . import settings as S
 from .journal import JournalError
 
@@ -171,7 +172,8 @@ class AutoPaper:
             return
         working = [e for e in book.values() if e.get("state") == "working"]
         held = round(sum(float(e.get("cost") or 0) for e in working), 2)
-        lim = S.limits(st, self.d.j.equity())
+        # your own risk when Claude's day cut would refuse a one-share-floor slip (pipeline.own_risk, T3)
+        lim = S.limits(P_.own_risk(st, self.d.j, now[:10]) or st, self.d.j.equity())
         # weak = the Time Machine odds are under your floor; practice only, so it may take them to learn
         statuses = ("ready", "weak") if st["auto_paper_weak"] else ("ready",)
         for s in sorted(self.d.j.signals(date=now[:10], statuses=statuses), key=lambda s: s["id"]):

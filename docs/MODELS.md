@@ -61,6 +61,10 @@ his lab the round-3 dip rule lived inside the bull branch). This desk follows th
 asking him which one his sealed tests used.** If his is the bull-only version, his results do not cover
 this rule exactly.
 
+**Now a live difference (2026-11-20).** SPY closed under its 200-day average on 11-19 (715.87 against 730.20) with
+RSI(2) at 1.2, so the dip vote is in and this book holds 2/3; a bull-only dip vote would hold 1/3. The books differ
+every day SPY stays under its average and in a dip. Kept as written (`docs/IMPROVE-2026-11-20.md` section 4).
+
 **How to judge it.** Against buy-and-hold SPY, after 6 to 12 months, on both return and worst drop. A few
 weeks of a daily model say nothing: the lab's edge is in rare crashes, and there may not be one in a year.
 

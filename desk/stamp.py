@@ -31,6 +31,8 @@ def rules(st):
     if "mode" in st:
         r.update(max_trades_per_day=S.trades_cap(st), leverage=S.leverage(st))
     r.update({k: v for k, v in S.screen(st).items() if v})     # only when on, so old rule sets keep their code
+    if st.get("mode") == "paper":                            # docs/IMPROVE-2026-11-20.md T2 and T3: a new rule set
+        r.update(rule201_limit=True, one_share_floor=True)
     if st.get("auto_paper_weak") and st.get("mode") == "paper":
         r["auto_paper_weak"] = True
     if st.get("analyst") and (st.get("plan_filter") == "on" or (st.get("plan_filter") == "paper" and st.get("mode") == "paper")):

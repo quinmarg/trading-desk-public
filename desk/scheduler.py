@@ -10,6 +10,7 @@ from . import settings as S
 from .paths import account_name
 
 CATALYSTS_EVERY = 3600   # seconds between catalyst gathers during the day (desk/catalysts.py)
+GAP_SECONDS = 180         # a longer pause between passes during entry hours is logged (_note_gap)
 PLAN_RETRY = 900         # seconds before a failed or skipped game-plan look is tried again (desk/analyst.py)
 PAPER_EVERY = 30         # seconds between looks at the practice account's open orders
 SCAN_DELAY = 25          # seconds after a 5-minute bar closes before its scan starts; shorter reads unsettled bars (docs/SPEED.md)
@@ -31,6 +32,7 @@ class Scheduler(threading.Thread):
         self.last_winter3x_try = 0.0
         self.wake = threading.Event()
         self.next_slot_at = 0.0         # wall time the next live scan slot starts, so the loop wakes right on it
+        self.last_tick = None           # (wall, New York time) when the last pass ended, to see when the desk was not running
 
     def stop(self):
         self.stop_flag.set()
@@ -56,8 +58,22 @@ class Scheduler(threading.Thread):
     def _combo(self, now):
         self._book(combo, now)
 
+    def _note_gap(self, wall, now, st, close):
+        """A pass after more than GAP_SECONDS of nothing during entry hours: the Mac slept (a closed lid on
+        battery, for example) or the desk was stopped. Breakouts then were never seen, so say so."""
+        prev = self.last_tick
+        if not prev or not close or wall - prev[0] < GAP_SECONDS or prev[1][:10] != now[:10]:
+            return
+        start, end = max(prev[1][11:16], st["no_entries_before"]), min(now[11:16], st["no_entries_after"])
+        if start >= end:
+            return
+        self.desk.j.add_event("health", "The desk did not run from %s to %s New York (the Mac was asleep, or the desk was "
+                              "stopped), so it saw no breakouts then. Keep the Mac awake and plugged in from 9:30." % (start, end),
+                              now, key="gap-%s-%s" % (now[:10], prev[1][11:16]))
+
     def tick(self, wall=None):
         """One pass of the loop. Split out so the tests can drive it."""
+        wall_given = wall
         wall = time.time() if wall is None else wall
         st, now = S.load(), self.desk.src.now()
         if self.premarket_day != now[:10] and (self.desk.src.demo or now[11:16] >= "08:00"):
@@ -67,6 +83,7 @@ class Scheduler(threading.Thread):
             self.last_catalysts = wall
         # None on a weekend or an NYSE holiday (Thanksgiving...): no hourly catalysts and no game plan, never in demo
         close = None if self.desk.src.demo else self.desk.session_close(now[:10])
+        self._note_gap(wall, now, st, close)
         # catalysts again each hour of the trading day, so news that breaks after 8:00 shows
         if st["catalysts"] and close and "08:00" <= now[11:16] < close and wall - self.last_catalysts >= CATALYSTS_EVERY:
             self.last_catalysts = wall
@@ -117,6 +134,8 @@ class Scheduler(threading.Thread):
         if wall - self.last_monitor >= st["monitor_every_seconds"]:
             self.last_monitor = wall
             self._safe("monitor", self.desk.monitor)
+        # measured from the end of the pass, so a long scan is not taken for a sleep (_note_gap)
+        self.last_tick = (time.time() if wall_given is None else wall, self.desk.src.now())
 
     def run(self):
         while not self.stop_flag.is_set():

@@ -1,3 +1,5 @@
+import unittest
+
 from desk import stamp
 from desk import settings as S
 from tests.test_desk import DemoCase
@@ -23,3 +25,11 @@ class Stamp(DemoCase):
         self.assertEqual(list(known), [h])
         self.assertEqual(known[h]["rules"]["target_r"], 2.0)
         self.assertEqual(known[h]["first_seen"], "2026-10-19 10:15")
+
+
+class Rule201AndOneShareStamp(unittest.TestCase):
+    def test_paper_signals_carry_the_two_new_rules_and_live_does_not(self):
+        from desk import settings as S
+        self.assertTrue(stamp.rules(S.validate({"mode": "paper"}))["rule201_limit"])
+        self.assertTrue(stamp.rules(S.validate({"mode": "paper"}))["one_share_floor"])
+        self.assertNotIn("rule201_limit", stamp.rules(S.validate({"mode": "live"})))

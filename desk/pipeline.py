@@ -11,6 +11,7 @@ import math
 from . import charts
 from . import guards
 from . import mode as M
+from . import outcome
 from . import settings as S
 from . import shorts
 from . import skills
@@ -55,6 +56,22 @@ def write_account(wd, st, journal, now):
                            "symbol": t["symbol"], "side": closed, "qty": str(t["qty"]), "price": t["exit_price"]})
     skills.write_json(wd / "trader" / "state" / "broker.json", {"orders": orders})
     return cfg
+
+
+def own_risk(st, journal, today):
+    """Paper mode (docs/IMPROVE-2026-11-20.md, T3): your settings with your own risk_per_trade_pct, when Claude's game
+    plan cut it for today (analyst.day_settings scales it by 0.5 to 1.0), else None. A trade the cut sizes to 0 shares
+    is sized again at your own percentage, which always gives exactly 1 share: the cut is at most half, so one share
+    risks under twice the cut limit."""
+    rec = journal.get("plan_settings") or {}
+    base = (rec.get("base") or {}).get("risk_per_trade_pct")
+    if st.get("mode") != "paper" or rec.get("date") != today or not base or float(base) <= float(st["risk_per_trade_pct"]):
+        return None
+    return dict(st, risk_per_trade_pct=float(base))
+
+
+ONE_SHARE = ("One share: Claude's plan cut today's risk to %.1f %% of the account, which left no shares, so the desk "
+             "sized it at your own %.1f %% (paper mode).")
 
 
 def edge_points(p_target, p_stop, target_r):
@@ -165,6 +182,16 @@ def _evaluate(symbol, st, journal, source, hit=None):
     r = skills.run("budget", ["--limit", "%.2f" % sig["limit"], "--write", "--json"] + na, wd)
     b = r.json
     sizing = (b or {}).get("sizing") if isinstance(b, dict) else None
+    mine = own_risk(st, journal, today) if (sizing or {}).get("refusal") and sizing.get("bound_by") == "max loss" else None
+    if mine:                                        # T3: the day's cut left 0 shares; size at your own risk instead
+        write_account(wd, mine, journal, now)
+        r2 = skills.run("budget", ["--limit", "%.2f" % sig["limit"], "--write", "--json"] + na, wd)
+        s2 = (r2.json or {}).get("sizing") if isinstance(r2.json, dict) else None
+        if s2 and not s2.get("refusal") and r2.json.get("orders"):
+            sig["warnings"].append(ONE_SHARE % (st["risk_per_trade_pct"], mine["risk_per_trade_pct"]))
+            st, r, b, sizing = mine, r2, r2.json, s2
+        else:
+            write_account(wd, st, journal, now)
     if not sizing or sizing.get("refusal") or not (b.get("orders")):
         why = (sizing or {}).get("refusal") or r.message
         sig["problems"].append("Budget: %s" % why)
@@ -303,14 +330,25 @@ def _evaluate_short(symbol, st, journal, source, chart=None):
         days = None
         sig["warnings"].append("Daily history could not be read (%s)." % e)
     past = [b for b in days or [] if b["date"] < today]
+    ssr = None
     if shorts.restricted(day_low, chart.get("prev_close")):
-        sig["problems"].append("Short-sale restriction: %s is down %.0f%% or more from yesterday's close (%.2f). "
-                               "Shorts can only fill above the best bid for the rest of today and tomorrow."
-                               % (symbol, shorts.SSR_DROP_PCT, chart["prev_close"]))
+        ssr = "today"
+        why = ("Short-sale restriction: %s is down %.0f%% or more from yesterday's close (%.2f). "
+               "Shorts can only fill above the best bid for the rest of today and tomorrow."
+               % (symbol, shorts.SSR_DROP_PCT, chart["prev_close"]))
     elif len(past) >= 2 and shorts.restricted(past[-1]["l"], past[-2]["c"]):
-        sig["problems"].append("Short-sale restriction: yesterday %s fell %.0f%% or more under the close before it (%.2f), "
-                               "so the restriction runs through today. Shorts can only fill above the best bid."
-                               % (symbol, shorts.SSR_DROP_PCT, past[-2]["c"]))
+        ssr = "yesterday"
+        why = ("Short-sale restriction: yesterday %s fell %.0f%% or more under the close before it (%.2f), "
+               "so the restriction runs through today. Shorts can only fill above the best bid."
+               % (symbol, shorts.SSR_DROP_PCT, past[-2]["c"]))
+    if ssr:
+        sig["ssr"] = ssr                            # the after-close replay uses outcome.replay_ssr either way
+        if st["mode"] == "paper":                   # T2: a sell-short limit above the bid instead of no short
+            pl["limit"] = sig["limit"] = outcome.ssr_limit(pl["entry"])
+            sig["warnings"].append(why + " So the sell-short limit is %.2f, a cent over the trigger close: it waits "
+                                   "above the bid and fills only if the price bounces back up to it." % pl["limit"])
+        else:
+            sig["problems"].append(why)
     direction, avg = shorts.trend([b["c"] for b in days] if days else None, pl["entry"])
     sig["trend"] = {"direction": direction, "average": avg, "days": shorts.TREND_DAYS}
     if direction == "up":
@@ -352,6 +390,12 @@ def _evaluate_short(symbol, st, journal, source, chart=None):
     # size: the same percentage limits as a long
     lim = S.limits(st, equity)
     sz = shorts.size(pl, lim, journal.buying_power(today))
+    mine = own_risk(st, journal, today) if sz["refusal"] and sz["bound_by"] == "risk per trade" else None
+    if mine:                                        # T3: the day's cut left 0 shares; size at your own risk instead
+        sz2 = shorts.size(pl, S.limits(mine, equity), journal.buying_power(today))
+        if not sz2["refusal"]:
+            sig["warnings"].append(ONE_SHARE % (st["risk_per_trade_pct"], mine["risk_per_trade_pct"]))
+            st, sz = mine, sz2
     sig.update({"qty": sz["qty"], "cost": sz["cost"], "max_loss": sz["max_loss"], "reward": sz["reward"],
                 "reward_risk": sz["reward_risk"], "bound_by": sz["bound_by"], "sizing_limits": sz["limits"]})
     if sz["refusal"]:

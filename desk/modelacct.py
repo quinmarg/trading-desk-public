@@ -280,3 +280,15 @@ def migrate(name, start=None):
     save(name, keep)
     old.rename(old.with_name(old.name + ".migrated"))
     return {"account": name, "days": len(keep.get("days") or []), "start_equity": start}
+
+
+def money(name, today):
+    """A model account's line for the Desk's money table: balance, today's made or lost (today's close, or the latest
+    price, against the day before) and the total since it started. Reads the file only."""
+    a = load(name).get("account")
+    if not a or not a.get("curve"):
+        return {"balance": None, "today": 0.0, "total": 0.0, "start": None}
+    curve = a["curve"]
+    prev = curve[-2]["equity"] if len(curve) > 1 else a["start"]
+    return {"balance": a["equity"], "today": round(curve[-1]["equity"] - prev, 2) if curve[-1]["date"] == today else 0.0,
+            "total": round(a["equity"] - a["start"], 2), "start": a["start"]}

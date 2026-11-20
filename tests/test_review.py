@@ -156,6 +156,18 @@ class FromCloddsBot(DemoCase):
         self.assertEqual(rows["+5 and up"]["no_fill"], 1)
         self.assertEqual([b["bucket"] for b in R.odds_by_edge(sigs, outs)], ["under -10", "0 to +5", "+5 and up"])
 
+    def test_rule_201_shorts_are_counted_apart_with_their_replays(self):
+        sigs = [{"id": 1, "status": "taken", "payload": {"ssr": "today", "side": "short"}},
+                {"id": 2, "status": "taken", "payload": {"ssr": "yesterday", "side": "short"}},
+                {"id": 3, "status": "weak", "payload": {"ssr": "today", "side": "short"}},
+                {"id": 4, "status": "taken", "payload": {"side": "short"}}]
+        outs = [{"signal_id": 1, "result": "target", "r": 2.0}, {"signal_id": 2, "result": "no fill", "r": None},
+                {"signal_id": 3, "result": "stop", "r": -1.0}, {"signal_id": 4, "result": "stop", "r": -1.0}]
+        rows = {h["status"]: h for h in R.rule201(sigs, outs)}
+        self.assertEqual(rows["taken"], {"status": "taken", "n": 2, "filled": 1, "total_r": 2.0, "avg_r": 2.0})
+        self.assertEqual((rows["weak"]["n"], rows["weak"]["avg_r"]), (1, -1.0))
+        self.assertEqual(R.rule201(sigs[3:], outs), [])                  # a plain short is not counted here
+
     def test_why_signals_were_held_back(self):
         sigs = [sig(1, "weak", -8, problems=["Time Machine edge is -8.0 points, under your floor of -5.0."]),
                 sig(2, "weak", -9, problems=["Time Machine edge is -9.0 points, under your floor of -5.0."]),

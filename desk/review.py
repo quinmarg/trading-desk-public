@@ -255,6 +255,26 @@ def held_back(signals, outcomes=()):
     return sorted(rows, key=lambda h: (-h["n"], h["reason"]))
 
 
+def rule201(signals, outcomes=()):
+    """Shorts under SEC Rule 201 (payload ssr): how many by status, and how the above-bid limit did on the replay
+    (outcome.replay_ssr). Paper mode trades them since 2026-11-20 on a passed but thin test (docs/IMPROVE-2026-11-20.md
+    T2: in-play ones averaged -0.16R on 46), so this is the forward check, by status (ready and taken are in play)."""
+    by = {o["signal_id"]: o for o in outcomes}
+    out = {}
+    for s in signals:
+        p = s.get("payload") or {}
+        if not p.get("ssr"):
+            continue
+        g = out.setdefault(s.get("status") or "?", {"n": 0, "filled": 0, "rs": []})
+        g["n"] += 1
+        o = by.get(s["id"])
+        if o and o["result"] in JUDGED and o.get("r") is not None:
+            g["filled"] += 1
+            g["rs"].append(o["r"])
+    return [{"status": k, "n": g["n"], "filled": g["filled"], "total_r": _r2(sum(g["rs"])) if g["rs"] else None,
+             "avg_r": _r2(_mean(g["rs"]))} for k, g in sorted(out.items())]
+
+
 def scan_stats(scans):
     ran = [s["summary"] for s in scans if not s["summary"].get("halt")]
     if not ran:
@@ -372,6 +392,7 @@ def summary(trades, signals, events=(), rulesets=None, min_trades=MIN_TRADES, ou
         "scans": scan_stats(scans), "rulesets": rulesets or {},
         "practice_fills": sum(1 for e in events if e.get("kind") == "paper"),
         "odds_by_edge": odds_by_edge(signals, outcomes), "held_back": held_back(signals, outcomes),
+        "rule201": rule201(signals, outcomes),
         "stops_log": [{"ts": e["ts"], "message": e["message"]} for e in events if e.get("kind") == "stops"][:30],
         "scan_lists": scan_lists(lists, signals, outcomes),
         "catalyst_vs_plain": catalyst_vs_plain(lists, signals, outcomes),
@@ -478,6 +499,9 @@ def report(mode, s, now, rules_hash=None):
     L += ["", "WHY SIGNALS WERE HELD BACK (weak, blocked or missed; how they would have done on the replay)"]
     L += ["  %s %d (replayed %d, average %s)" % (h["reason"], h["n"], h["replayed"], fr(h["avg_r"]))
           for h in s.get("held_back") or []] or ["  none"]
+    L += ["", "RULE 201 SHORTS (down 10 %: paper rests the limit a cent above the trigger; replays fill only on a bounce)"]
+    L += ["  %s %d (filled on the replay %d, total %s, average %s)" % (h["status"], h["n"], h["filled"], fr(h["total_r"]),
+                                                                     fr(h["avg_r"])) for h in s.get("rule201") or []] or ["  none yet"]
     L += ["", "RISK STOPS (weekly loss, drop from the best point, losers in a row; newest first)"]
     L += ["  %s  %s" % (e["ts"], e["message"]) for e in s.get("stops_log") or []] or ["  none tripped"]
     sc = s.get("scans")
